@@ -17,7 +17,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from expressbus.data.vag import NETWORK_FILE, PULS_BASE, STOPS_FILE, ensure_network
+from expressbus.data.vag import NETWORK_FILE, PULS_BASE, ROOT, STOPS_FILE, ensure_network
+from expressbus.live.routing import Router
 from expressbus.live.tracker import LiveTracker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -25,11 +26,13 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 STATIC = Path(__file__).parent / "static"
 tracker = LiveTracker(record=os.getenv("RECORD_TRIPS", "1") == "1")
+OSRM_CACHE = ROOT / "data" / "processed" / "osrm_cache.json"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await asyncio.to_thread(ensure_network)
+    tracker.router = Router(NETWORK_FILE, OSRM_CACHE)
     task = asyncio.create_task(tracker.run())
     yield
     task.cancel()
@@ -56,6 +59,13 @@ def stops():
 @app.get("/api/vehicles")
 def vehicles():
     return tracker.snapshot()
+
+
+@app.post("/api/segments")
+def segments(ids: list[int]):
+    """Routed stop-to-stop paths ([[lat, lon], ...]) by segment id."""
+    segs = tracker.router.segments
+    return {i: segs[i] for i in ids if 0 <= i < len(segs)}
 
 
 @app.get("/api/departures/{vgn_id}")

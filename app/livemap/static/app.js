@@ -85,22 +85,67 @@ function fmtDelay(sec) {
 const fmtTime = (ts) => new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// Routed stop-to-stop paths from the server (snapped to the line geometry), by id.
+const segments = new Map(); // id -> { pts: [[lat, lon]], cum: [m], len: m }
+function addSegment(id, pts) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const dy = pts[i][0] - pts[i - 1][0], dx = (pts[i][1] - pts[i - 1][1]) * 0.65; // cos(49.45°)
+    cum.push(cum[i - 1] + Math.hypot(dx, dy) * 111320);
+  }
+  segments.set(Number(id), { pts, cum, len: cum[cum.length - 1] });
+}
+async function loadMissingSegments() {
+  const missing = [...new Set(trips.flatMap((t) => t.stops.map((s) => s.seg)).filter((id) => id !== undefined && !segments.has(id)))];
+  if (!missing.length) return;
+  const res = await fetch("/api/segments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(missing) });
+  for (const [id, pts] of Object.entries(await res.json())) addSegment(id, pts);
+}
+function alongSegment(seg, f) {
+  const d = seg.len * f;
+  let i = 1;
+  while (i < seg.cum.length - 1 && seg.cum[i] < d) i++;
+  const span = seg.cum[i] - seg.cum[i - 1];
+  const g = span > 0 ? (d - seg.cum[i - 1]) / span : 1;
+  const [a, b] = [seg.pts[i - 1], seg.pts[i]];
+  return [a[0] + (b[0] - a[0]) * g, a[1] + (b[1] - a[1]) * g];
+}
+// Where a vehicle stands at stop i: on the line (end of the arriving path) if known.
+function stopPoint(s, i) {
+  const inSeg = segments.get(s[i].seg), outSeg = s[i + 1] && segments.get(s[i + 1].seg);
+  if (inSeg) return inSeg.pts[inSeg.pts.length - 1];
+  if (outSeg) return outSeg.pts[0];
+  return [s[i].lat, s[i].lon];
+}
+function tripPath(trip) {
+  const s = trip.stops, pts = [];
+  s.forEach((st, i) => {
+    const seg = segments.get(st.seg);
+    if (seg) pts.push(...seg.pts);
+    else pts.push([st.lat, st.lon]);
+  });
+  return pts;
+}
+
 // Position + current delay of a trip at time t (epoch seconds), or null if not on the road.
 function locate(trip, t) {
   const s = trip.stops;
   if (s.length < 2) return null;
   const first = s[0], last = s[s.length - 1];
   if (t < first.dep - 120 || t > last.arr + 60) return null;
-  if (t <= first.dep) return { lat: first.lat, lon: first.lon, delay: first.delay, next: 0 };
+  const at = (i) => { const [lat, lon] = stopPoint(s, i); return { lat, lon, delay: s[i].delay, next: i }; };
+  if (t <= first.dep) return { ...at(0), next: 0 };
   for (let i = 1; i < s.length; i++) {
     const a = s[i - 1], b = s[i];
     if (t <= b.arr) {
       const f = b.arr > a.dep ? Math.min(1, Math.max(0, (t - a.dep) / (b.arr - a.dep))) : 1;
-      return { lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f, delay: b.delay, next: i };
+      const seg = segments.get(b.seg);
+      const [lat, lon] = seg ? alongSegment(seg, f) : [a.lat + (b.lat - a.lat) * f, a.lon + (b.lon - a.lon) * f];
+      return { lat, lon, delay: b.delay, next: i };
     }
-    if (t <= b.dep) return { lat: b.lat, lon: b.lon, delay: b.delay, next: i };
+    if (t <= b.dep) return at(i);
   }
-  return { lat: last.lat, lon: last.lon, delay: last.delay, next: s.length - 1 };
+  return at(s.length - 1);
 }
 
 // ---------- network ----------
@@ -211,6 +256,7 @@ async function pollVehicles() {
   try {
     const data = await (await fetch("/api/vehicles")).json();
     trips = data.trips;
+    await loadMissingSegments();
     document.getElementById("updated").textContent = data.updated
       ? `Live · data from ${fmtTime(data.updated)} · ${trips.length} trips tracked`
       : "Loading live data (first poll takes ~30 s)…";
@@ -297,8 +343,8 @@ function openTrip(id, m) {
   openTripId = id;
   tripLayer.clearLayers();
   const t = m._trip;
-  L.polyline(t.stops.map((s) => [s.lat, s.lon]), { color: colorOf(t), weight: 4, opacity: 0.6, dashArray: "6 6", pane: "trip" }).addTo(tripLayer);
-  for (const s of t.stops) L.circleMarker([s.lat, s.lon], { radius: 3, color: colorOf(t), weight: 2, fillColor: "#fff", fillOpacity: 1, pane: "trip" }).bindTooltip(s.name).addTo(tripLayer);
+  L.polyline(tripPath(t), { color: colorOf(t), weight: 4, opacity: 0.6, dashArray: "6 6", pane: "trip" }).addTo(tripLayer);
+  t.stops.forEach((s, i) => L.circleMarker(stopPoint(t.stops, i), { radius: 3, color: colorOf(t), weight: 2, fillColor: "#fff", fillOpacity: 1, pane: "trip" }).bindTooltip(s.name).addTo(tripLayer));
   m.bindPopup("", { maxWidth: 320, autoPan: false });
   renderTripPopup(m);
   m.openPopup();

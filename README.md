@@ -49,8 +49,11 @@ by delay. Inspired by https://livemap.vag.de, which shows only U-Bahn/tram; this
   every 90 s). The browser interpolates vehicle positions between stops every second.
 - **Recording:** finished trips are appended to `data/raw/live/trips_<date>.jsonl`, so delay data
   builds up while the server runs. Turn it off with `RECORD_TRIPS=0`.
-- **Limitations:** vehicles move in straight lines between stops (not snapped to streets). Occupancy
-  (`Besetztgrad`) is currently always "Unbekannt".
+- **Snapping to streets** (`src/expressbus/live/routing.py`): each stop-to-stop hop follows the
+  shortest path along that line's geometry. If that fails, it tries all lines of the same product
+  (replacement buses also try the tram network), then road routing via the public OSRM server
+  (cached in `data/processed/osrm_cache.json`), and only then a straight line.
+- **Limitations:** occupancy (`Besetztgrad`) is currently always "Unbekannt".
 
 ## Possible data sources
 - VAG PULS API (live departures/trips): https://start.vag.de/dm/api/v1

@@ -10,6 +10,7 @@ data accumulates for later analysis.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import time
@@ -18,6 +19,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from expressbus.data.vag import PRODUCTS, PULS_BASE, ROOT
+from expressbus.live.routing import Router
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +69,8 @@ def compact_trip(product: str, d: dict) -> dict:
 
 
 class LiveTracker:
-    def __init__(self, record: bool = True):
+    def __init__(self, router: Router | None = None, record: bool = True):
+        self.router = router
         self.record = record
         self.trips: dict[str, dict] = {}  # id -> compact trip
         self._fetched_at: dict[str, float] = {}
@@ -122,10 +125,19 @@ class LiveTracker:
             try:
                 r = await self._client.get(url)
                 r.raise_for_status()
-                self.trips[tid] = compact_trip(product, r.json())
+                trip = compact_trip(product, r.json())
+                if self.router:
+                    await asyncio.to_thread(self._attach_segments, trip)
+                self.trips[tid] = trip
                 self._fetched_at[tid] = time.time()
             except (httpx.HTTPError, ValueError, KeyError) as e:  # keep the stale copy
                 log.debug("detail %s failed: %s", tid, e)
+
+    def _attach_segments(self, trip: dict) -> None:
+        """stops[i]["seg"] = id of the routed path from stop i-1 to stop i."""
+        s = trip["stops"]
+        for a, b in itertools.pairwise(s):
+            b["seg"] = self.router.segment(trip["product"], trip["line"], (a["lat"], a["lon"]), (b["lat"], b["lon"]))
 
     def _finish(self, tid: str) -> None:
         trip = self.trips.pop(tid, None)
