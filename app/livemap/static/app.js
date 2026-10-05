@@ -20,6 +20,7 @@ let selectedLine = "";
 const layerChecked = (k) => document.querySelector(`[data-layer="${k}"]`).checked;
 
 const net = NetMap.create(map, {
+  labelMinZoom: 14,
   initialLayers: Object.fromEntries(["net-UBahn", "net-Tram", "net-Bus", "net-Regio"].map((k) => [k, layerChecked(k)])),
   onLineClick: (_product, line) => setLine(line),
   vehicleFilter: (t) => !selectedLine || t.line === selectedLine,

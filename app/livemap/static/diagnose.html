@@ -10,33 +10,27 @@
 </head>
 <body class="diagnose">
   <aside id="sidebar">
-    <header>
-      <h1>Network Diagnosis</h1>
-      <p class="muted">Where does the current network have problems? <a href="/">Live map</a> · <a href="/planner">Planner →</a></p>
-    </header>
+    <nav class="steps"><a href="/"><b>1</b><span>Live</span></a><a href="/diagnose" class="active"><b>2</b><span>Diagnose</span></a><a href="/planner"><b>3</b><span>Plan</span></a></nav>
 
     <section>
-      <h2>Problem layer</h2>
       <div id="layer-list" class="layer-list"></div>
-      <label class="small" id="bus-only-row"><input type="checkbox" id="bus-only" checked /> Buses only (observed layers)</label>
     </section>
 
     <section id="layer-info">
-      <h3 id="info-title"></h3>
       <p id="info-question" class="question"></p>
-      <p class="lever"><b>Lever in the planner:</b> <span id="info-lever"></span></p>
-      <p class="muted small" id="info-source"></p>
       <div id="legend" class="legend-box"></div>
       <div id="sd-mode" class="sd-mode hidden">
         <label><input type="radio" name="sdmode" value="index" checked /> Supply per resident</label>
         <label><input type="radio" name="sdmode" value="redundant" /> Bus places where rail already serves</label>
       </div>
       <div id="summary"></div>
+      <p class="lever"><b>What to do in the planner:</b> <span id="info-lever"></span></p>
     </section>
 
     <section>
       <h2 id="top-title">Top problem spots</h2>
       <ol id="top-list" class="top-list"></ol>
+      <button id="top-more" class="link hidden">Show more</button>
     </section>
 
     <section>
@@ -44,11 +38,17 @@
       <ol id="line-list" class="line-list"></ol>
     </section>
 
-    <section>
-      <h2>Map</h2>
+    <details>
+      <summary>How this is measured</summary>
+      <p class="muted small" id="info-source"></p>
+      <label class="small" id="bus-only-row"><input type="checkbox" id="bus-only" checked /> Buses only (observed layers)</label>
+    </details>
+
+    <details>
+      <summary>Map layers</summary>
       <label><input type="checkbox" id="show-network" checked /> Network lines (faded)</label>
       <label><input type="checkbox" id="show-live" /> Live vehicles</label>
-    </section>
+    </details>
   </aside>
   <main id="map"></main>
 

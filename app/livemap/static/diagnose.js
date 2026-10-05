@@ -33,12 +33,23 @@ function fadeNetwork() {
 }
 
 let meta = {}, current = null, cache = {};
+let topExpanded = false;
+const TOP_N = 5;
+// collapse long lists to the first TOP_N entries
+function limitTop() {
+  const items = [...document.querySelectorAll("#top-list li")];
+  items.forEach((li, i) => li.classList.toggle("hidden", !topExpanded && i >= TOP_N));
+  const btn = document.getElementById("top-more");
+  btn.classList.toggle("hidden", items.length <= TOP_N);
+  btn.textContent = topExpanded ? "Show fewer" : `Show ${items.length - TOP_N} more`;
+}
+document.getElementById("top-more").addEventListener("click", () => { topExpanded = !topExpanded; limitTop(); });
 
 function renderLayerList() {
   const box = document.getElementById("layer-list");
   box.innerHTML = LAYER_ORDER.map((k) => {
     const m = k === "supply_demand" ? SUPPLY_DEMAND : meta[k];
-    return `<button data-key="${k}"><span>${esc(m.title)}</span><span class="src">${esc(m.source)}</span></button>`;
+    return `<button data-key="${k}">${esc(m.title)}</button>`;
   }).join("");
   box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => select(b.dataset.key)));
 }
@@ -57,11 +68,11 @@ async function select(key) {
   current = key;
   document.querySelectorAll("#layer-list button").forEach((b) => b.classList.toggle("active", b.dataset.key === key));
   const m = key === "supply_demand" ? SUPPLY_DEMAND : meta[key];
-  document.getElementById("info-title").textContent = m.title;
   document.getElementById("info-question").textContent = m.question;
   document.getElementById("info-lever").textContent = m.lever;
   document.getElementById("info-source").textContent = "Loading…";
   document.getElementById("bus-only-row").classList.toggle("hidden", m.source !== "observed");
+  topExpanded = false;
   document.getElementById("sd-mode").classList.toggle("hidden", key !== "supply_demand");
   dataLayer.clearLayers();
   markerLayer.clearLayers();
@@ -85,7 +96,7 @@ function renderHeat(d) {
   const ol = document.getElementById("top-list");
   ol.innerHTML = d.top.map((it, i) => `<li data-i="${i}"><span class="val">${fmtVal(it.value)}</span><b>${esc(it.label)}</b>
     <span class="sub">${esc(it.detail)}${it.lines.length ? " · " + esc(it.lines.slice(0, 6).join(", ")) : ""}</span></li>`).join("");
-  d.top.forEach((it, i) => {
+  d.top.slice(0, TOP_N).forEach((it, i) => { // numbered markers only for the top spots
     const m = L.circleMarker([it.lat, it.lon], { radius: 9, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.9 })
       .bindTooltip(`${i + 1}`, { permanent: true, direction: "center", className: "rank-label" })
       .bindPopup(`<div class="popup"><h3>${i + 1}. ${esc(it.label)}</h3><p class="meta">${esc(it.detail)}</p>${it.lines.length ? `<p>${esc(it.lines.join(", "))}</p>` : ""}</div>`);
@@ -94,17 +105,17 @@ function renderHeat(d) {
   ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
     const it = d.top[+li.dataset.i];
     map.flyTo([it.lat, it.lon], 15);
-    markerLayer.getLayers()[+li.dataset.i].openPopup();
+    markerLayer.getLayers()[+li.dataset.i]?.openPopup();
   }));
   renderLines(d.by_line, d.unit, "Lines most affected");
-  document.getElementById("summary").innerHTML = `<div class="tile"><span class="label">Locations</span><span class="value">${d.count.toLocaleString("en")}</span></div>`;
+  limitTop();
 }
 
 function renderLines(rows, unit, title) {
   document.getElementById("lines-title").textContent = title;
   if (!rows?.length) { document.getElementById("line-list").innerHTML = '<li class="muted">–</li>'; return; }
   const max = Math.max(...rows.map((r) => r.value ?? r.share));
-  document.getElementById("line-list").innerHTML = rows.map((r) => {
+  document.getElementById("line-list").innerHTML = rows.slice(0, 5).map((r) => {
     const v = r.value ?? r.share;
     const txt = r.share !== undefined ? `${Math.round(r.share * 100)} % of its places` : `${Math.round(v).toLocaleString("en")} ${esc(unit)}`;
     return `<li><b>${esc(r.line)}</b> · ${txt}<span class="bar" style="width:${(60 * v) / max}px"></span></li>`;
@@ -149,19 +160,18 @@ function renderSupplyDemand(d) {
        <div class="ramp-labels"><span>few bus places</span><span>many bus places where rail serves</span></div>`;
   const s = d.summary, pct = (x) => `${Math.round((100 * x) / s.residents)} %`;
   document.getElementById("summary").innerHTML = `
-    <div class="tile"><span class="label">Not served</span><span class="value">${s.residents_unserved.toLocaleString("en")}</span><span class="sub">residents (${pct(s.residents_unserved)})</span></div>
-    <div class="tile"><span class="label">Under-supplied</span><span class="value">${s.residents_under.toLocaleString("en")}</span><span class="sub">residents (${pct(s.residents_under)})</span></div>
-    <div class="tile"><span class="label">Over-supplied</span><span class="value">${s.residents_over.toLocaleString("en")}</span><span class="sub">residents (${pct(s.residents_over)})</span></div>
-    <div class="tile"><span class="label">Bus places where rail serves</span><span class="value">${Math.round(s.bus_places_in_rail_covered * 100)} %</span><span class="sub">of all VAG bus places</span></div>`;
+    <div class="tile"><span class="label">Residents under-supplied or not served</span><span class="value">${pct(s.residents_unserved + s.residents_under)}</span><span class="sub">${(s.residents_unserved + s.residents_under).toLocaleString("en")} people</span></div>
+    <div class="tile"><span class="label">VAG bus places where rail already serves</span><span class="value">${Math.round(s.bus_places_in_rail_covered * 100)} %</span><span class="sub">candidates to redistribute</span></div>`;
   document.getElementById("top-title").textContent = "Largest under-served areas";
   const ol = document.getElementById("top-list");
   ol.innerHTML = d.unserved_clusters.map((c, i) => `<li data-i="${i}"><span class="val">${c.residents.toLocaleString("en")}</span><b>Area ${i + 1}</b>
     <span class="sub">${c.places_per_resident} places/resident · nearest stop ${c.nearest_stop_m} m · bus lines: ${esc(c.bus_lines.join(", ") || "none")}</span></li>`).join("");
   markerLayer.clearLayers();
-  d.unserved_clusters.forEach((c, i) => markerLayer.addLayer(L.circleMarker([c.lat, c.lon], { radius: 9, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.9 })
+  d.unserved_clusters.slice(0, TOP_N).forEach((c, i) => markerLayer.addLayer(L.circleMarker([c.lat, c.lon], { radius: 9, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.9 })
     .bindTooltip(`${i + 1}`, { permanent: true, direction: "center", className: "rank-label" })));
   ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => { const c = d.unserved_clusters[+li.dataset.i]; map.flyTo([c.lat, c.lon], 15); }));
   renderLines(d.redundant_lines, "", "Bus lines mostly where rail already serves");
+  limitTop();
 }
 document.querySelectorAll('input[name="sdmode"]').forEach((r) => r.addEventListener("change", () => select("supply_demand")));
 document.getElementById("bus-only").addEventListener("change", () => select(current));

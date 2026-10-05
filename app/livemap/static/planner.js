@@ -177,6 +177,7 @@ function addFeature(f) {
 }
 function changed() {
   renderFeatures();
+  renderPresets();
   styleLines();
   refreshInventory();
 }
@@ -191,9 +192,9 @@ function renderFeatures() {
     const li = document.createElement("li");
     li.className = f.enabled ? "" : "off";
     li.innerHTML = `<input type="checkbox" ${f.enabled ? "checked" : ""} aria-label="enable" />
-      <span><span class="title">${esc(featureTitle(f))}</span><br><span class="small muted">${esc(TYPE_LABEL[f.type])}</span></span>
+      <span class="title">${esc(featureTitle(f))}</span>
       <button class="x" title="Remove">×</button>
-      <div class="desc">${esc(featureDesc(f))}${chips ? "<br>" + chips : ""}</div>`;
+      <div class="desc">${chips || ""}${f.type === "add_express" || f.type === "shorten_line" ? `<span class="small muted">${esc(featureDesc(f))}</span>` : ""}</div>`;
     li.querySelector("input").addEventListener("change", (e) => { f.enabled = e.target.checked; changed(); });
     li.querySelector(".x").addEventListener("click", () => { features = features.filter((x) => x !== f); changed(); });
     ul.appendChild(li);
@@ -213,7 +214,8 @@ function chipHtml(step) {
 function renderPresets() {
   const ul = document.getElementById("presets");
   ul.innerHTML = "";
-  for (const p of meta.presets) {
+  const used = new Set(features.map((f) => f.title).filter(Boolean));
+  for (const p of meta.presets.filter((x) => !used.has(x.title))) {
     const li = document.createElement("li");
     li.innerHTML = `<span>${esc(p.title)}</span><button>Add</button>`;
     li.querySelector("button").addEventListener("click", () => addFeature(structuredClone(p)));
@@ -224,13 +226,9 @@ function renderPresets() {
 // ---------- forms ----------
 let formType = null;
 function renderAddButtons() {
-  const box = document.getElementById("add-buttons");
-  for (const [type, label] of Object.entries(TYPE_LABEL)) {
-    const b = document.createElement("button");
-    b.textContent = "+ " + label;
-    b.addEventListener("click", () => openForm(type));
-    box.appendChild(b);
-  }
+  const sel = document.getElementById("add-select");
+  sel.insertAdjacentHTML("beforeend", Object.entries(TYPE_LABEL).map(([t, l]) => `<option value="${t}">${l}</option>`).join(""));
+  sel.addEventListener("change", () => { if (sel.value) openForm(sel.value); sel.value = ""; });
 }
 function lineOptions(includeAll, selected) {
   const all = includeAll ? [["Bus:*", "All bus lines"], ["Tram:*", "All tram lines"]] : [];
@@ -373,15 +371,19 @@ function renderInventory(prev) {
 
   const box = document.getElementById("pools");
   if (!box.children.length) {
-    box.innerHTML = Object.keys(b.pools).map((p) => `
+    const tpl = (p) => `
       <div class="pool ${p === "Bus" ? "" : "small"}" data-pool="${p}">
         <div class="top"><span>${POOL_LABEL[p]}</span><span><b class="used-n"></b> / <span class="cap-n"></span> · <span class="free"></span></span></div>
         <div class="bar"><div class="used"></div><div class="freed"></div><div class="over"></div></div>
         <div class="sub"><span>Driver hours/day: <b class="h-used"></b> / <span class="h-cap"></span></span><span class="h-free"></span></div>
-      </div>`).join("");
+      </div>`;
+    box.innerHTML = tpl("Bus");
+    document.getElementById("pools-other").innerHTML = Object.keys(b.pools).filter((p) => p !== "Bus").map(tpl).join("");
   }
+  const other = Object.keys(b.pools).filter((p) => p !== "Bus").map((p) => `${p === "UBahn" ? "U-Bahn" : p} ${s.pools[p].peak}/${b.pools[p].peak}`);
+  document.getElementById("other-pools-summary").textContent = `Tram & U-Bahn drivers · ${other.join(" · ")}`;
   for (const p of Object.keys(b.pools)) {
-    const el = box.querySelector(`[data-pool="${p}"]`);
+    const el = document.querySelector(`[data-pool="${p}"]`);
     const cap = b.pools[p].peak, used = s.pools[p].peak, free = cap - used;
     const hc = b.pools[p].hours, hu = s.pools[p].hours, hf = hc - hu;
     animateNumber(el.querySelector(".used-n"), used);
@@ -491,10 +493,20 @@ document.getElementById("eval-run").addEventListener("click", async () => {
   }
 });
 
+// shown by default; the rest behind "Show all KPIs"
+const HEADLINE = new Set(["PT / car travel time (median)", "Trips where PT ≤ 1.5× car", "Expected wait per stop section", "Avg. delay", "Bus drivers at peak"]);
+let lastResult = null, showAllKpis = false;
+document.getElementById("kpi-more").addEventListener("click", () => {
+  showAllKpis = !showAllKpis;
+  renderKpis(lastResult);
+});
+
 function renderKpis(r) {
+  lastResult = r;
   const tb = document.querySelector("#kpi-table tbody");
   tb.innerHTML = "";
   for (const [label, get, fmt, better] of KPI_ROWS) {
+    if (!showAllKpis && !HEADLINE.has(label)) continue;
     if (!get) { tb.insertAdjacentHTML("beforeend", `<tr class="group"><td colspan="4">${label}</td></tr>`); continue; }
     const a = get(r.baseline), b = get(r.scenario);
     if (a == null || b == null) continue;
@@ -506,10 +518,13 @@ function renderKpis(r) {
       cls = good ? "better" : "worse";
       icon = good ? "✓ " : "▲ ";
     }
-    const rel = a ? ` (${d > 0 ? "+" : ""}${((100 * d) / Math.abs(a)).toFixed(1)} %)` : "";
-    tb.insertAdjacentHTML("beforeend", `<tr><td>${label}</td><td>${fmt(a)}</td><td>${fmt(b)}</td><td class="${cls}">${Math.abs(d) > eps ? icon + (d > 0 ? "+" : "−") + String(fmt(Math.abs(d))) + rel : "–"}</td></tr>`);
+    tb.insertAdjacentHTML("beforeend", `<tr><td>${label}</td><td>${fmt(a)}</td><td>${fmt(b)}</td><td class="${cls}">${Math.abs(d) > eps ? icon + (d > 0 ? "+" : "−") + String(fmt(Math.abs(d))) : "–"}</td></tr>`);
   }
   document.getElementById("kpi-table").classList.remove("hidden");
+  document.getElementById("eval-method").classList.remove("hidden");
+  const more = document.getElementById("kpi-more");
+  more.classList.remove("hidden");
+  more.textContent = showAllKpis ? "Show key KPIs only" : "Show all KPIs";
   document.getElementById("eval-notes").innerHTML = `Period ${r.period[0]} – ${r.period[1]} · planned timetable: VGN GTFS · car: OSRM free-flow × time-of-day congestion + 5 min access · OD sample: 400 station pairs × 6 departure times/day · delay: ${esc(r.baseline.delay_source)}.`;
 }
 
@@ -519,6 +534,7 @@ function renderKpis(r) {
   for (const l of meta.lines) lineById[l.id] = l;
   for (const s of meta.stations) stationById[s.id] = s;
   await net.start();
+  document.querySelectorAll("[data-veh]").forEach((cb) => cb.dispatchEvent(new Event("change")));
   buildStationLayer();
   renderAddButtons();
   renderPresets();

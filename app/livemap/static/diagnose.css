@@ -30,3 +30,8 @@ a { color: #2a78d6; }
 .loading { color: var(--text-muted); font-size: 13px; }
 .rank-label { background: none; border: none; box-shadow: none; font-weight: 700; font-size: 11px; color: #0b0b0b; padding: 0; }
 .rank-label::before { display: none; }
+
+.layer-list { grid-template-columns: 1fr 1fr; }
+.layer-list button { justify-content: flex-start; font-size: 13px; }
+.lever { margin-top: 10px; }
+button.link { border: none; background: none; color: #2a78d6; padding: 4px 0; font-size: 12px; cursor: pointer; font: inherit; font-size: 12px; }

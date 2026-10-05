@@ -9,26 +9,25 @@
 </head>
 <body>
   <aside id="sidebar">
-    <header>
-      <h1>Nuremberg Live Network</h1>
-      <p class="muted" id="updated">Connecting…</p>
-      <p class="small"><a href="/diagnose">Diagnosis</a> · <a href="/planner">Planner & evaluation →</a></p>
-    </header>
+    <nav class="steps"><a href="/" class="active"><b>1</b><span>Live</span></a><a href="/diagnose"><b>2</b><span>Diagnose</span></a><a href="/planner"><b>3</b><span>Plan</span></a></nav>
+    <p class="muted small" id="updated">Connecting…</p>
 
     <section class="tiles">
-      <div class="tile"><span class="label">Vehicles on the road</span><span class="value" id="kpi-total">–</span><span class="sub" id="kpi-split"></span></div>
-      <div class="tile"><span class="label">On time (≤ 1 min)</span><span class="value" id="kpi-ontime">–</span></div>
-      <div class="tile"><span class="label">Avg. delay</span><span class="value" id="kpi-delay">–</span></div>
-      <div class="tile"><span class="label">Delayed &gt; 3 min</span><span class="value" id="kpi-late">–</span></div>
+      <div class="tile"><span class="label">On the road</span><span class="value" id="kpi-total">–</span><span class="sub" id="kpi-split"></span></div>
+      <div class="tile"><span class="label">On time (≤ 1 min)</span><span class="value" id="kpi-ontime">–</span><span class="sub">avg. delay <b id="kpi-delay">–</b> · <b id="kpi-late">–</b> &gt; 3 min late</span></div>
     </section>
 
     <section>
-      <h2>Line</h2>
-      <select id="line-filter"><option value="">All lines</option></select>
+      <select id="line-filter" aria-label="Line"><option value="">All lines</option></select>
     </section>
 
     <section>
-      <h2>Layers</h2>
+      <h2>Most delayed lines right now</h2>
+      <ol id="worst-lines" class="worst"></ol>
+    </section>
+
+    <details>
+      <summary>Map layers</summary>
       <label><input type="checkbox" data-layer="net-UBahn" checked /> U-Bahn network</label>
       <label><input type="checkbox" data-layer="net-Tram" checked /> Tram network</label>
       <label><input type="checkbox" data-layer="net-Bus" checked /> City bus network (VAG)</label>
@@ -38,15 +37,10 @@
       <label><input type="checkbox" data-veh="Bus" checked /> Live buses</label>
       <label><input type="checkbox" data-veh="Tram" checked /> Live trams</label>
       <label><input type="checkbox" data-veh="UBahn" checked /> Live U-Bahn</label>
-    </section>
+    </details>
 
-    <section>
-      <h2>Most delayed lines</h2>
-      <ol id="worst-lines" class="worst"></ol>
-    </section>
-
-    <section>
-      <h2>Legend</h2>
+    <details>
+      <summary>Legend</summary>
       <ul class="legend">
         <li><span class="veh-sample bus" style="--c:#2a78d6">36</span> Bus &nbsp;<span class="veh-sample tram" style="--c:#f27b85">4</span> Tram &nbsp;<span class="veh-sample ubahn" style="--c:#1a4099">U1</span> U-Bahn</li>
         <li><i class="dot good"></i> ✓ On time (≤ 1 min)</li>
@@ -55,8 +49,8 @@
         <li><i class="dot critical"></i> ■ &gt; 5 min late</li>
         <li><i class="dot none"></i> ○ No real-time data (timetable)</li>
       </ul>
-      <p class="muted small">Positions are interpolated between stops from VAG real-time departure data (PULS API), like livemap.vag.de.</p>
-    </section>
+      <p class="muted small">Positions are interpolated between stops from VAG real-time data (PULS API), like livemap.vag.de.</p>
+    </details>
   </aside>
   <main id="map"></main>
 

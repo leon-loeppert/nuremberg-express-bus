@@ -106,3 +106,14 @@ input, select { font: inherit; padding: 4px 6px; border: 1px solid var(--border)
 .live-badge b { color: var(--text-primary); }
 .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0ca30c; margin-right: 6px; animation: blink 2s infinite; }
 @keyframes blink { 50% { opacity: .3; } }
+
+.add-select { width: 100%; margin-top: 4px; padding: 6px; color: #1c5cab; font-weight: 600; }
+.features li { grid-template-columns: auto 1fr auto; }
+.other-pools { margin-top: 4px; border-top: none; padding-top: 0; }
+.other-pools > summary { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; }
+.eval-controls .period { margin: 0; border: none; padding: 0; }
+.eval-controls .period > summary { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.eval-controls .period label { display: inline-grid; margin-right: 6px; }
+button.link { border: none; background: none; color: #2a78d6; padding: 4px 0; font-size: 12px; }
+#eval-method { border-top: none; margin-top: 4px; }
+#eval-method > summary { text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; }
