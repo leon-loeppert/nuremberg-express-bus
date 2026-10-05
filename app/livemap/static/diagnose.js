@@ -421,11 +421,8 @@ function renderVerdict(d) {
     <p class="muted small">Goal: faster public transport with the bus drivers we already have.</p>
     <table class="vt">
       <tr><td>Bus drivers at peak</td><td>${v.drivers_before} → <b>${v.drivers_after}</b> ${v.drivers_ok ? '<span class="status good">✓ no new drivers</span>' : '<span class="status critical">▲ over budget</span>'}</td></tr>
-      <tr><td>Avg. PT trip (door to door)</td><td>${v.pt_minutes_before} → <b>${v.pt_minutes_after} min</b></td></tr>
-      <tr><td>Trips where PT ≤ 1.5× car</td><td>${pct(v.competitive_before)} → <b>${pct(v.competitive_after)}</b></td></tr>
-      <tr><td>Trips faster</td><td><b>${pct(v.share_faster)}</b>, by ${v.avg_saving_min} min</td></tr>
-      <tr><td>Trips slower</td><td>${pct(v.share_slower)}, by ${v.avg_loss_min} min</td></tr>
-      <tr><td>Passenger time saved</td><td><b>≈ ${v.hours_saved_per_day.toLocaleString("en")} h</b> per weekday*</td></tr>
+      <tr><td>Weekday rush hours</td><td><b>${pct(v.share_faster)}</b> of trips faster by ${v.avg_saving_min} min, ${pct(v.share_slower)} slower by ${v.avg_loss_min} min · <b>≈ ${v.hours_saved_per_day.toLocaleString("en")} h</b> saved per weekday*</td></tr>
+      <tr><td>Whole week, all day</td><td>avg. trip ${v.pt_minutes_before.toFixed(2)} → <b>${v.pt_minutes_after.toFixed(2)} min</b> · PT ≤ 1.5× car ${pct(v.competitive_before)} → ${pct(v.competitive_after)} · wait ${v.wait_before.toFixed(1)} → ${v.wait_after.toFixed(1)} min</td></tr>
     </table>
     <button class="primary" id="pkg-add">Open this package in the planner (${all.length} changes)</button>
     <p class="muted tiny">* scaled to ~450,000 VAG trips per weekday; demand estimated from residents and stop activity (no passenger counts).</p>`;
