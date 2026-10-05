@@ -49,11 +49,13 @@ const liveBadge = L.DomUtil.create("div", "live-badge");
 const LiveControl = L.Control.extend({ onAdd: () => liveBadge });
 new LiveControl({ position: "bottomleft" }).addTo(map);
 liveBadge.textContent = "Live vehicles loading…";
-L.control.layers(null, {
-  "U-Bahn lines": net.layers["net-UBahn"], "Tram lines": net.layers["net-Tram"], "Bus lines": net.layers["net-Bus"],
-  "Regional buses (VGN)": net.layers["net-Regio"], "Live vehicles": net.vehicleLayer,
-}, { position: "topright" }).addTo(map);
-map.on("overlayadd overlayremove", () => net.updateLabels());
+// map layer toggles (same as on the live map)
+document.querySelectorAll("[data-layer]").forEach((cb) => cb.addEventListener("change", () => net.setLayer(cb.dataset.layer, cb.checked)));
+document.querySelectorAll("[data-veh]").forEach((cb) => cb.addEventListener("change", () => {
+  net.setProductVisible(cb.dataset.veh, cb.checked);
+  const on = [...document.querySelectorAll("[data-veh]")].some((x) => x.checked);
+  liveBadge.style.display = on ? "" : "none";
+}));
 
 function styleLines() {
   const focus = document.getElementById("focus-changes").checked;
