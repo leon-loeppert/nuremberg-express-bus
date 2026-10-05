@@ -21,3 +21,8 @@ python-dotenv
 jupyterlab
 pytest
 ruff
+playwright
+# Live map server
+fastapi
+uvicorn[standard]
+httpx
