@@ -56,3 +56,4 @@ by delay. Inspired by https://livemap.vag.de, which shows only U-Bahn/tram; this
 - VAG PULS API (live departures/trips): https://start.vag.de/dm/api/v1
 - VGN GTFS open data (Nuremberg timetables): https://www.vgn.de/opendata
 - OpenStreetMap road network
+# ClaudeHackathon
