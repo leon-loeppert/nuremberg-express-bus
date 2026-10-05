@@ -11,3 +11,4 @@ data/processed/*
 
 # local screenshots
 Screenshot*.png
+*.egg-info/
