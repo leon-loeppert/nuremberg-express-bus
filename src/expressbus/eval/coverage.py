@@ -16,6 +16,7 @@ covers well (redundant bus places) vs. residents with little or no service at al
 
 from __future__ import annotations
 
+import zipfile
 from collections import defaultdict
 from datetime import date
 from functools import lru_cache
@@ -29,6 +30,7 @@ from expressbus.eval.kpis import WINDOW
 from expressbus.eval.timetable import BBOX, load_day
 
 ZENSUS_CSV = ROOT / "data" / "raw" / "zensus" / "Zensus2022_Bevoelkerungszahl_100m-Gitter.csv"
+ZENSUS_ZIP = ROOT / "data" / "raw" / "zensus" / "bevoelkerung.zip"  # destatis.de Zensus2022_Bevoelkerungszahl.zip
 ZENSUS_CACHE = ROOT / "data" / "processed" / "zensus_study_area.parquet"
 REFERENCE_DAY = date(2026, 9, 28)
 CELL_M = 300
@@ -47,7 +49,12 @@ def residents() -> pd.DataFrame:
     if not ZENSUS_CACHE.exists():
         x0, y0 = _to3035.transform(BBOX["lon_min"], BBOX["lat_min"])
         x1, y1 = _to3035.transform(BBOX["lon_max"], BBOX["lat_max"])
-        df = pd.read_csv(ZENSUS_CSV, sep=";", usecols=["x_mp_100m", "y_mp_100m", "Einwohner"])
+        cols = ["x_mp_100m", "y_mp_100m", "Einwohner"]
+        if ZENSUS_CSV.exists():
+            df = pd.read_csv(ZENSUS_CSV, sep=";", usecols=cols)
+        else:  # read straight from the downloaded archive
+            with zipfile.ZipFile(ZENSUS_ZIP) as z, z.open(ZENSUS_CSV.name) as f:
+                df = pd.read_csv(f, sep=";", usecols=cols)
         df = df[df.x_mp_100m.between(x0, x1) & df.y_mp_100m.between(y0, y1) & (df.Einwohner > 0)]
         df = df.rename(columns={"x_mp_100m": "x", "y_mp_100m": "y", "Einwohner": "pop"})
         ZENSUS_CACHE.parent.mkdir(parents=True, exist_ok=True)
@@ -69,7 +76,8 @@ def station_supply(day: date = REFERENCE_DAY) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def supply_demand() -> dict:
+def cells_frame() -> tuple[pd.DataFrame, float]:
+    """300 m cells of the VAG service area with residents, supply, class. Returns (cells, median)."""
     pop = residents()
     pop = pop.assign(cx=(pop.x // CELL_M).astype(int), cy=(pop.y // CELL_M).astype(int))
     cells = pop.groupby(["cx", "cy"]).agg(pop=("pop", "sum")).reset_index()
@@ -127,6 +135,12 @@ def supply_demand() -> dict:
     lon, lat = _to4326.transform(cells.x.values, cells.y.values)
     cells["lat"], cells["lon"] = lat, lon
     cells["bus_lines"] = [sorted(s, key=_num) for s in bus_lines]
+    return cells, median
+
+
+@lru_cache(maxsize=1)
+def supply_demand() -> dict:
+    cells, median = cells_frame()
 
     # summary numbers
     total_pop = int(cells["pop"].sum())

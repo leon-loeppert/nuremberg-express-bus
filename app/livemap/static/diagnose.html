@@ -10,11 +10,9 @@
 </head>
 <body class="diagnose">
   <aside id="sidebar">
-    <nav class="steps"><a href="/"><b>1</b><span>Live</span></a><a href="/diagnose" class="active"><b>2</b><span>Diagnose</span></a><a href="/planner"><b>3</b><span>Plan</span><i id="queued" class="badge hidden"></i></a></nav>
+    <nav class="steps"><a href="/"><b>1</b><span>Live</span></a><a href="/diagnose" class="active"><b>2</b><span>Express check</span></a><a href="/planner"><b>3</b><span>Plan</span><i id="queued" class="badge hidden"></i></a></nav>
 
-    <section>
-      <div id="layer-list" class="layer-list"></div>
-    </section>
+    <section id="verdict" class="verdict"><p class="muted small">Checking whether express buses fit into today's driver budget… (first run takes ~3 min)</p></section>
 
     <section id="layer-info">
       <p id="info-question" class="question"></p>
@@ -34,6 +32,20 @@
       <div id="spot-lines" class="line-chips"></div>
       <h2>What you can do</h2>
       <ul id="spot-suggestions" class="suggestions"></ul>
+    </section>
+
+    <section id="proposals" class="hidden">
+      <div id="package" class="package"></div>
+      <h2>All express candidates</h2>
+      <ul id="express-list" class="cards"></ul>
+      <details>
+        <summary>Where the drivers can come from</summary>
+        <ul id="cut-list" class="cards"></ul>
+      </details>
+      <details>
+        <summary>Under-served regions</summary>
+        <ol id="region-list" class="top-list"></ol>
+      </details>
     </section>
 
     <section id="spots-section">
@@ -59,6 +71,11 @@
         <label><input type="checkbox" id="show-problems" checked /> Problem layer</label>
       </div>
     </section>
+
+    <details id="more-analysis">
+      <summary>More analysis layers</summary>
+      <div id="layer-list" class="layer-list"></div>
+    </details>
 
     <details>
       <summary>How this is measured</summary>

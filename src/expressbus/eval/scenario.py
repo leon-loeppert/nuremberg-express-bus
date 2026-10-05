@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from expressbus.eval.cartimes import CONGESTION, free_flow_matrix
+from expressbus.eval.cartimes import CONGESTION, free_flow_matrix, street_route
 from expressbus.eval.timetable import Timetable
 
 FEATURES = {
@@ -166,9 +166,16 @@ def add_express(tt: Timetable, name: str, stations: list[str], headway_min: floa
     stations = [s for s in stations if s in pos.index]
     if len(stations) < 2:
         return
-    points = {s: (pos.lat[s], pos.lon[s]) for s in stations}
-    legs = list(itertools.pairwise(stations)) + list(itertools.pairwise(stations[::-1]))
-    free = free_flow_matrix(points, legs)
+    # running time per leg from the street route through all stops (one per direction)
+    free = {}
+    for pattern in (stations, stations[::-1]):
+        route = street_route([(pos.lat[s], pos.lon[s]) for s in pattern])
+        if route:
+            free.update(dict(zip(itertools.pairwise(pattern), route["legs_s"])))
+    missing = [leg for leg in itertools.pairwise(stations) if leg not in free]
+    missing += [leg for leg in itertools.pairwise(stations[::-1]) if leg not in free]
+    if missing:  # fall back to the OSRM table if the route service fails
+        free.update(free_flow_matrix({s: (pos.lat[s], pos.lon[s]) for s in stations}, missing))
     rows, trips = [], []
     patterns = [stations, stations[::-1]] if both_directions else [stations]
     for d, pattern in enumerate(patterns):

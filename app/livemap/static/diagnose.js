@@ -1,12 +1,17 @@
 // Network diagnosis: heatmaps of problem types plus a supply-vs-demand grid.
 
 const { esc } = NetMap;
-const LAYER_ORDER = ["supply_demand", "delay_buildup", "bunching", "service_gaps", "pt_vs_car", "parallel_rail"];
+const LAYER_ORDER = ["proposals", "supply_demand", "delay_buildup", "bunching", "service_gaps", "pt_vs_car", "parallel_rail"];
 const SUPPLY_DEMAND = {
   title: "Over- / under-supply",
   question: "Where are places offered out of proportion to the residents who live there? (300 m cells)",
   lever: "Take bus trips from over-supplied (blue) corridors, especially where rail already serves, and spend the drivers on red areas",
   source: "timetable + Zensus 2022",
+};
+const PROPOSALS = {
+  title: "★ Express check",
+  question: "Concrete changes for the whole network: where to take drivers from, and where to spend them.",
+  source: "model",
 };
 // sequential ramp for heatmaps (one hue family, light -> dark)
 const HEAT_STOPS = [[0.15, "#fde4c8"], [0.4, "#f6a35c"], [0.65, "#e4682b"], [0.85, "#b83a17"], [1, "#7a1f0b"]];
@@ -74,8 +79,8 @@ document.getElementById("top-more").addEventListener("click", () => { topExpande
 function renderLayerList() {
   const box = document.getElementById("layer-list");
   box.innerHTML = LAYER_ORDER.map((k) => {
-    const m = k === "supply_demand" ? SUPPLY_DEMAND : meta[k];
-    return `<button data-key="${k}">${esc(m.title)}</button>`;
+    const m = k === "supply_demand" ? SUPPLY_DEMAND : k === "proposals" ? PROPOSALS : meta[k];
+    return `<button data-key="${k}" class="${k === "proposals" ? "star" : ""}">${esc(m.title)}</button>`;
   }).join("");
   box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => select(b.dataset.key)));
 }
@@ -84,7 +89,7 @@ async function fetchLayer(key) {
   const busOnly = document.getElementById("bus-only").checked;
   const ck = `${key}:${busOnly}`;
   if (!cache[ck]) {
-    const url = key === "supply_demand" ? "/api/diagnose/supply_demand" : `/api/diagnose/${key}?bus_only=${busOnly}`;
+    const url = key === "supply_demand" ? "/api/diagnose/supply_demand" : key === "proposals" ? "/api/proposals" : `/api/diagnose/${key}?bus_only=${busOnly}`;
     cache[ck] = (await fetch(url)).json();
   }
   return cache[ck];
@@ -93,7 +98,7 @@ async function fetchLayer(key) {
 async function select(key) {
   current = key;
   document.querySelectorAll("#layer-list button").forEach((b) => b.classList.toggle("active", b.dataset.key === key));
-  const m = key === "supply_demand" ? SUPPLY_DEMAND : meta[key];
+  const m = key === "supply_demand" ? SUPPLY_DEMAND : key === "proposals" ? PROPOSALS : meta[key];
   document.getElementById("info-question").textContent = m.question;
   document.getElementById("info-source").textContent = "Loading…";
   document.getElementById("bus-only-row").classList.toggle("hidden", m.source !== "observed");
@@ -102,12 +107,17 @@ async function select(key) {
   dataLayer.clearLayers();
   markerLayer.clearLayers();
   closeSpot();
+  document.getElementById("legend").innerHTML = "";
   document.getElementById("top-list").innerHTML = '<li class="loading">computing… (first time can take ~30 s)</li>';
   document.getElementById("line-list").innerHTML = "";
   document.getElementById("summary").innerHTML = "";
   const data = await fetchLayer(key);
   if (current !== key) return;
-  key === "supply_demand" ? renderSupplyDemand(data) : renderHeat(data);
+  document.getElementById("proposals").classList.toggle("hidden", key !== "proposals");
+  document.getElementById("verdict").classList.toggle("hidden", key !== "proposals");
+  document.getElementById("spots-section").classList.toggle("hidden", key === "proposals");
+  if (key === "proposals") renderProposals(data);
+  else key === "supply_demand" ? renderSupplyDemand(data) : renderHeat(data);
 }
 
 // ---------- problem spots ----------
@@ -264,6 +274,13 @@ function suggestionsFor(sp) {
       if (bus.length >= 2) out.push({ title: `Interleave ${bus[0]} and ${bus[1]}`, why: "Shift one timetable so the two lines don't run right behind each other.", feature: { type: "debunch", line_a: ref(bus[0]), line_b: ref(bus[1]) } });
       bus.slice(0, 1).forEach((l) => out.push({ title: `More recovery time / headway control for ${l}`, why: "Bunching usually starts with a late bus picking up everyone. Longer turnaround buffers or headway-based dispatching help. (Operational, not in the planner.)" }));
       break;
+    case "region":
+      for (const x of proposals.express.filter((e) => e.coords.some(([la, lo]) => Math.hypot((la - sp.lat) * 111.3, (lo - sp.lon) * 72.4) < 2))) {
+        out.push({ title: `Express ${x.title}`, why: `Stops within 2 km of this region; ${(100 * x.share_faster).toFixed(1)} % of all trips get faster by ${x.avg_saving_min} min.`, feature: x.feature });
+      }
+      bus.slice(0, 2).forEach((l) => out.push({ title: `More trips on ${l} (06–20 h, double frequency)`, why: `${l} serves the most residents of this region.`, feature: { type: "densify_line", line: ref(l), from_h: 6, to_h: 20 } }));
+      if (!out.length) feeder();
+      break;
     case "service_gaps":
     case "under_served":
       bus.slice(0, 2).forEach((l) => out.push({ title: `More trips on ${l} (06–20 h, double frequency)`, why: "Shorter waits for the people living here. Costs drivers, so pair it with a saving elsewhere.", feature: { type: "densify_line", line: ref(l), from_h: 6, to_h: 20 } }));
@@ -291,6 +308,9 @@ async function selectSpot(sp) {
   await getPlannerMeta();
   document.getElementById("spot").classList.remove("hidden");
   document.getElementById("spots-section").classList.add("hidden");
+  document.getElementById("proposals").classList.add("hidden");
+  regionLayer.clearLayers();
+  if (sp.boxes) for (const b of sp.boxes) L.rectangle([[b[0], b[1]], [b[2], b[3]]], { color: "#b42b2b", weight: 1, fillColor: "#e07b7b", fillOpacity: 0.35, renderer: canvas, interactive: false }).addTo(regionLayer);
   document.getElementById("spot-title").textContent = sp.label + (sp.valueText ? ` · ${sp.valueText}` : "");
   document.getElementById("spot-detail").textContent = sp.detail;
   document.getElementById("spot-lines").innerHTML = sp.lines.length
@@ -324,8 +344,9 @@ async function selectSpot(sp) {
 }
 function closeSpot() {
   document.getElementById("spot").classList.add("hidden");
-  document.getElementById("spots-section").classList.remove("hidden");
-  highlight(null);
+  document.getElementById(current === "proposals" ? "proposals" : "spots-section").classList.remove("hidden");
+  regionLayer.clearLayers();
+  highlight(current === "proposals" && proposals ? new Set(proposals.cuts.map((c) => lineKey(c.line))) : null);
 }
 document.getElementById("spot-close").addEventListener("click", closeSpot);
 
@@ -355,10 +376,110 @@ document.getElementById("show-problems").addEventListener("change", (e) => {
   updateQueued();
   meta = await (await fetch("/api/diagnose")).json();
   renderLayerList();
-  select("supply_demand");
+  select("proposals");
   await net.start();
   net.setVehiclesVisible(false);
   net.loadStops(true);
   fillLineFilter();
   highlight(null);
 })();
+
+// ---------- proposals ----------
+let proposals = null;
+const regionLayer = L.layerGroup().addTo(map);
+const fmtDrivers = (n) => (n > 0 ? `<span class="chip gain">+${n} drivers free</span>` : n < 0 ? `<span class="chip cost">needs ${-n} drivers</span>` : '<span class="chip">± 0 drivers</span>');
+
+function drawExpress(x, strong) {
+  const line = L.polyline(x.path || x.coords, { color: "#4a3aa7", weight: strong ? 7 : 5, opacity: strong ? 1 : 0.8, dashArray: strong ? null : "8 6" }).addTo(dataLayer);
+  x.coords.forEach((c, i) => L.circleMarker(c, { radius: 5, color: "#4a3aa7", weight: 3, fillColor: "#fff", fillOpacity: 1 })
+    .bindTooltip(x.stop_names[i]).addTo(dataLayer));
+  L.marker(x.coords[0], { icon: L.divIcon({ className: "", html: `<div class="express-tag">${esc(x.name)}</div>`, iconSize: null, iconAnchor: [-6, 10] }) }).addTo(dataLayer);
+  line.on("click", () => focusExpress(x));
+  return line;
+}
+function focusExpress(x) {
+  dataLayer.clearLayers();
+  renderProposalMap(x.name);
+  map.flyToBounds(L.latLngBounds(x.path || x.coords), { padding: [60, 60], maxZoom: 14 });
+}
+function renderProposalMap(strongName = null) {
+  const inPackage = new Set(proposals.package.express.map((x) => x.feature.name));
+  for (const x of proposals.express) drawExpress(x, x.name === strongName || (!strongName && inPackage.has(x.name)));
+}
+
+function addToPlan(features, btn) {
+  features.forEach(queueFeature);
+  if (btn) { btn.textContent = "✓ Added"; btn.disabled = true; }
+}
+
+const pct = (x, d = 1) => `${(100 * x).toFixed(d)} %`;
+function renderVerdict(d) {
+  const v = d.verdict, p = d.package;
+  const all = [...p.cuts.map((c) => ({ ...c.feature, title: c.title })), ...p.express.map((x) => ({ ...x.feature, title: `Express ${x.title}` }))];
+  document.getElementById("verdict").innerHTML = `
+    <h3>${v.achieved ? "✓ Yes" : "✗ Not yet"}: ${p.express.length} express line${p.express.length === 1 ? "" : "s"} without hiring</h3>
+    <p class="muted small">Goal: faster public transport with the bus drivers we already have.</p>
+    <table class="vt">
+      <tr><td>Bus drivers at peak</td><td>${v.drivers_before} → <b>${v.drivers_after}</b> ${v.drivers_ok ? '<span class="status good">✓ no new drivers</span>' : '<span class="status critical">▲ over budget</span>'}</td></tr>
+      <tr><td>Avg. PT trip (door to door)</td><td>${v.pt_minutes_before} → <b>${v.pt_minutes_after} min</b></td></tr>
+      <tr><td>Trips where PT ≤ 1.5× car</td><td>${pct(v.competitive_before)} → <b>${pct(v.competitive_after)}</b></td></tr>
+      <tr><td>Trips faster</td><td><b>${pct(v.share_faster)}</b>, by ${v.avg_saving_min} min</td></tr>
+      <tr><td>Trips slower</td><td>${pct(v.share_slower)}, by ${v.avg_loss_min} min</td></tr>
+      <tr><td>Passenger time saved</td><td><b>≈ ${v.hours_saved_per_day.toLocaleString("en")} h</b> per weekday*</td></tr>
+    </table>
+    <button class="primary" id="pkg-add">Open this package in the planner (${all.length} changes)</button>
+    <p class="muted tiny">* scaled to ~450,000 VAG trips per weekday; demand estimated from residents and stop activity (no passenger counts).</p>`;
+  document.getElementById("pkg-add").addEventListener("click", (e) => { addToPlan(all, e.target); location.href = "/planner"; });
+
+  document.getElementById("package").innerHTML = `
+    <h2>The package</h2>
+    <ul>${p.express.map((x) => `<li class="plus"><b>+ ${esc(x.title)}</b> ${fmtDrivers(-x.drivers)}<span class="chip gain">≈ ${x.hours_saved_per_day} h/day saved</span></li>`).join("")}
+        ${p.cuts.map((c) => `<li class="minus">− ${esc(c.title)} ${fmtDrivers(c.drivers)}${c.hours_lost_per_day ? `<span class="chip cost">≈ ${c.hours_lost_per_day} h/day lost</span>` : ""}</li>`).join("")}</ul>`;
+}
+
+function renderProposals(d) {
+  proposals = d;
+  document.getElementById("info-source").textContent = "Demand: gravity model on 1 km zones (Zensus 2022 residents × stop activity, 4 km distance decay). Express corridors: zone pairs ≥ 4 km where PT is much slower than 1.3× the car, weighted by demand. Express routes follow streets (OSRM) and are timed on that route with rush-hour congestion. Every candidate is costed with the driver model and its effect measured on all zone-to-zone trips at 07:30 and 16:30. Drivers are freed by thinning or removing bus lines where rail already serves, cheapest passenger loss first.";
+  renderVerdict(d);
+  renderProposalMap();
+  highlight(new Set(d.package.cuts.map((c) => lineKey(c.title.split(" ").slice(-2).join(" ")))));
+
+  const ex = document.getElementById("express-list");
+  ex.innerHTML = d.express.map((x, i) => `<li data-i="${i}">
+      <b>${esc(x.title)}</b>
+      <span class="why">${x.km} km on the street · ~${x.run_minutes} min end to end in rush hour · every 15 min, Mon–Fri 06–20 h</span>
+      <span class="why">${pct(x.share_faster, 2)} of all trips get faster, by ${x.avg_saving_min} min on average</span>
+      <span>${fmtDrivers(-x.drivers)}<span class="chip gain">≈ ${x.hours_saved_per_day} h/day saved</span></span>
+      <span class="actions"><button class="primary small" data-add="${i}">Add to plan</button><button class="link" data-show="${i}">Show on map</button></span>
+    </li>`).join("") || '<li class="muted">No express line saves enough time.</li>';
+  ex.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => addToPlan([{ ...d.express[+b.dataset.add].feature, title: `Express ${d.express[+b.dataset.add].title}` }], b)));
+  ex.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => focusExpress(d.express[+b.dataset.show])));
+
+  const cu = document.getElementById("cut-list");
+  cu.innerHTML = d.cuts.map((c, i) => {
+    const [prod, ...ln] = c.line.split(" "), col = net.colorOf(prod, ln.join(" "));
+    return `<li>
+      <span><button class="chip-line bus" style="--c:${col};--fg:${NetMap.textColorFor(col)}" data-line="${i}">${esc(ln.join(" "))}</button> <b>${esc(c.title.replace(` ${c.line}`, ""))}</b></span>
+      <span class="why">${Math.round(c.rail_share * 100)} % of its places are where rail already serves · ${c.residents_losing_only_service.toLocaleString("en")} residents have no other stop</span>
+      <span>${fmtDrivers(c.drivers)}${c.hours_lost_per_day ? `<span class="chip cost">≈ ${c.hours_lost_per_day} h/day lost</span>` : '<span class="chip">no measurable loss</span>'}</span>
+      <span class="actions"><button class="primary small" data-add="${i}">Add to plan</button></span>
+    </li>`;
+  }).join("");
+  cu.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => { const c = d.cuts[+b.dataset.add]; addToPlan([{ ...c.feature, title: c.title }], b); }));
+  cu.querySelectorAll("[data-line]").forEach((b) => b.addEventListener("click", () => {
+    const key = lineKey(d.cuts[+b.dataset.line].line);
+    highlight(new Set([key]));
+    const fb = L.featureGroup(net.lineFeatures[key] || []).getBounds();
+    if (fb.isValid()) map.flyToBounds(fb, { padding: [40, 40] });
+  }));
+
+  const rl = document.getElementById("region-list");
+  rl.innerHTML = d.regions.under.map((r, i) => `<li data-i="${i}"><span class="val">${r.residents.toLocaleString("en")}</span><b>${esc(r.name)}</b>
+    <span class="sub">${r.places_per_resident} places/resident (typical 40) · bus: ${esc(r.lines.slice(0, 5).map((l) => l.replace("Bus ", "")).join(", ") || "none")}</span></li>`).join("");
+  rl.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
+    const r = d.regions.under[+li.dataset.i];
+    selectSpot({ ...r, kind: "region", label: r.name, valueText: `${r.residents.toLocaleString("en")} residents`,
+      detail: `${r.places_per_resident} places/resident (typical 40) · ${r.unserved_residents.toLocaleString("en")} without any stop nearby`,
+      lines: r.lines.slice(0, 8), station: r.anchor.id, bounds: L.latLngBounds(r.boxes.flatMap((b) => [[b[0], b[1]], [b[2], b[3]]])) });
+  }));
+}

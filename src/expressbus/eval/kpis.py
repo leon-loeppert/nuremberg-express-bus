@@ -81,25 +81,29 @@ def _is_holiday_schedule(day: date) -> bool:
 
 # ---------- KPIs ----------
 def travel_kpis(tt: Timetable, aliases: dict[str, str] | None = None) -> dict:
-    sample, points = od_sample()
-    free = free_flow_matrix(points, [(o, d) for o, ds in sample for d in ds])
+    """PT vs. car on the demand-weighted trip sample (see demand.py), walk to/from stops included."""
+    from expressbus.eval import demand
+
+    groups = demand.grouped()
+    free = free_flow_matrix(demand.points(), [(t["o"], t["d"]) for ts in groups.values() for t in ts])
     planner = Planner(tt, aliases)
     weekend = tt.day.weekday() >= 5 or _is_holiday_schedule(tt.day)
     ratios, pt_min, car_min, transfers, unreachable = [], [], [], [], 0
     for t0 in departure_times(tt.day):
-        for o, ds in sample:
+        for o, trips in groups.items():
             arrival, boards = planner.scan(o, t0)
-            for d in ds:
-                if (o, d) not in free:
+            for t in trips:
+                if (t["o"], t["d"]) not in free:
                     continue
-                k = planner.idx.get(d)
+                k = planner.idx.get(t["d"])
                 pt = arrival[k] - t0 if k is not None else math.inf
                 if pt == math.inf or pt > UNREACHABLE_CAP_S:
                     unreachable += 1
                     pt = UNREACHABLE_CAP_S
                 else:
                     transfers.append(max(0, boards[k] - 1))
-                car = car_time(free[(o, d)], t0 // 3600, weekend)
+                pt += t["walk_s"]
+                car = car_time(free[(t["o"], t["d"])], t0 // 3600, weekend)
                 ratios.append(pt / car)
                 pt_min.append(pt / 60)
                 car_min.append(car / 60)

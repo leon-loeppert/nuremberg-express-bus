@@ -37,6 +37,23 @@ pytest
 jupyter lab
 ```
 
+## The answer: express check
+`http://localhost:8000/diagnose` answers one question: **can we run express buses with the drivers we already have,
+and do passengers gain?** (`src/expressbus/eval/proposals.py`)
+
+1. **Demand** (`demand.py`): gravity model on 1 km zones, residents (Zensus 2022) × stop activity, 4 km
+   decay. Full zone-to-zone matrix (~76,000 relations) with door-to-door PT time (walk + wait + ride) and car time.
+2. **Express corridors**: zone pairs ≥ 4 km where PT is much slower than 1.3× the car, weighted by demand,
+   grouped into 2 km corridors. Each gets an express line (busiest stops at both ends, up to two transfer hubs
+   on the way). The line follows the street route from OSRM, and is timed on that route with rush-hour congestion.
+3. **Cost and benefit**: drivers needed from the rotation model, passenger time saved from re-planning every
+   relation with the line added.
+4. **Funding**: thin or remove bus lines where rail already serves, cheapest passenger loss per driver first.
+5. **Package and verdict**: the best express lines that can be funded at zero extra drivers and still save
+   passenger time overall. "Open this package in the planner" hands it over for a week-long check.
+
+Results are cached in `data/processed/proposals.json` and recomputed when model code or input data change.
+
 ## Live map
 Shows the U-Bahn, tram and bus network on OpenStreetMap, plus every running vehicle, coloured
 by delay. Inspired by https://livemap.vag.de, which shows only U-Bahn/tram; this map adds buses.
@@ -111,3 +128,9 @@ recording started, so they are a line-level model, not a replay of last week.
 - VGN GTFS open data (Nuremberg timetables): https://www.vgn.de/opendata
 - OpenStreetMap road network
 # ClaudeHackathon
+
+## Data in this repository
+Committed: VGN GTFS archive (CC BY 3.0 DE), Zensus 2022 population grid archive (dl-de/by-2-0), VAG stops
+from the PULS API, recorded live trips, and all processed results/caches (OSRM-based car times and routes,
+© OpenStreetMap contributors). Not committed: extracted copies of the archives (too large for GitHub) and the
+line geometry from livemap.vag.de (no open licence; downloaded automatically on server start).

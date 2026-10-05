@@ -101,11 +101,23 @@ function styleLines() {
 }
 document.getElementById("focus-changes").addEventListener("change", styleLines);
 
+// express lines follow the street route the server times them on (cached per stop sequence)
+const routeCache = new Map();
+function streetPath(ids) {
+  const key = ids.join(",");
+  if (!routeCache.has(key) && ids.length >= 2) {
+    routeCache.set(key, null);
+    fetch("/api/express_route", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stations: ids }) })
+      .then((r) => (r.ok ? r.json() : null)).then((r) => { if (r) { routeCache.set(key, r.path); styleLines(); } });
+  }
+  return routeCache.get(key);
+}
 function drawExpress(ids, name, isDraft) {
   const pts = ids.map((id) => stationById[id]).filter(Boolean).map((s) => [s.lat, s.lon]);
   if (!pts.length) return;
-  L.polyline(pts, { color: "#fff", weight: 9, opacity: 0.9, pane: "fx" }).addTo(fxLayer);
-  L.polyline(pts, { color: COLORS.express, weight: 5, dashArray: isDraft ? "6 6" : null, pane: "fx" }).addTo(fxLayer);
+  const path = streetPath(ids) || pts;
+  L.polyline(path, { color: "#fff", weight: 9, opacity: 0.9, pane: "fx" }).addTo(fxLayer);
+  L.polyline(path, { color: COLORS.express, weight: 5, dashArray: isDraft ? "6 6" : null, pane: "fx" }).addTo(fxLayer);
   pts.forEach((p, i) => {
     L.circleMarker(p, { radius: 5, color: COLORS.express, weight: 3, fillColor: "#fff", fillOpacity: 1, pane: "fx" })
       .bindTooltip(stationById[ids[i]].name).addTo(fxLayer);

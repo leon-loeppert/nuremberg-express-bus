@@ -10,22 +10,13 @@ import numpy as np
 from expressbus.eval.resources import DRIVERLESS, build_blocks
 from expressbus.eval.timetable import EDITABLE, load_day
 
-PRESETS = [
+PRESETS = [  # express lines themselves come from the express check (proposals.py)
     {"type": "thin_line", "line": "Bus:*", "from_h": 20, "to_h": 27, "keep_every": 2, "days": "all",
      "title": "Evening buses every 2nd trip (after 20:00)"},
-    {"type": "thin_line", "line": "Bus:*", "from_h": 4, "to_h": 9, "keep_every": 2, "days": "weekend",
-     "title": "Weekend early-morning buses every 2nd trip"},
-    {"type": "remove_line", "line": "Bus:34", "title": "Remove bus 34 (89 % of stops next to rail)"},
-    {"type": "speedup", "line": "Bus:35", "pct": 10, "title": "Bus 35 priority lanes (-10 % running time)"},
+    {"type": "remove_line", "line": "Bus:84", "title": "Remove bus 84 (99 % next to rail)"},
     {"type": "interline", "line_a": "Bus:35", "line_b": "Bus:65",
      "title": "Merge bus 35 + 65 (share both termini, ride through)"},
-    {"type": "speedup", "line": "Bus:*", "pct": 10, "title": "City-wide bus priority (-10 % running time)"},
-    {"type": "add_express", "name": "X1", "headway_min": 15, "from_h": 6, "to_h": 20, "days": "weekday",
-     "stations": ["de:09563:2180", "de:09564:1296", "de:09564:1293", "de:09564:350", "de:09564:1335", "de:09564:1431"],
-     "title": "X1 North cross-town: Fürth Klinikum - Thon - Nordostbf - Mögeldorf"},
-    {"type": "add_express", "name": "X2", "headway_min": 15, "from_h": 6, "to_h": 20, "days": "weekday",
-     "stations": ["de:09564:1171", "de:09564:601", "de:09564:1730", "de:09564:1757", "de:09564:1701", "de:09564:1567"],
-     "title": "X2 South cross-town: Rothenburger Str. - Südfriedhof - Langwasser"},
+    {"type": "speedup", "line": "Bus:35", "pct": 10, "title": "Bus 35 priority lanes (-10 % running time)"},
 ]
 
 

@@ -5,10 +5,15 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 .DS_Store
-data/raw/*
-data/processed/*
-!data/**/.gitkeep
+*.egg-info/
+*.tmp
 
 # local screenshots
 Screenshot*.png
-*.egg-info/
+
+# Data: archives and processed results are committed; extracted copies are too big for GitHub
+data/raw/gtfs/vgn/
+data/raw/zensus/*.csv
+data/raw/zensus/*.xlsx
+# line geometry scraped from livemap.vag.de (no open licence) - re-downloaded on server start
+data/raw/vag/network.geojson

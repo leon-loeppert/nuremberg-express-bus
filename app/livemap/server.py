@@ -112,6 +112,9 @@ def _warm_planner():
     supply_demand()
     for key in ("service_gaps", "parallel_rail", "pt_vs_car"):
         diagnose.layer(key)
+    from expressbus.eval.proposals import all_proposals
+
+    all_proposals()
     logging.getLogger(__name__).info("planner baseline ready")
 
 
@@ -166,6 +169,33 @@ def diagnose_layers():
     from expressbus.eval.diagnose import LAYERS
 
     return LAYERS
+
+
+class RouteRequest(BaseModel):
+    stations: list[str]
+
+
+@app.post("/api/express_route")
+async def express_route(req: RouteRequest):
+    """Street route through the given GTFS stations (for drawing user-made express lines)."""
+    from expressbus.eval.cartimes import street_route
+    from expressbus.eval.meta import planner_meta
+
+    pos = {s["id"]: (s["lat"], s["lon"]) for s in planner_meta(DEFAULT_DAY)["stations"]}
+    pts = [pos[s] for s in req.stations if s in pos]
+    if len(pts) < 2:
+        raise HTTPException(400, "need at least two known stations")
+    route = await asyncio.to_thread(street_route, pts)
+    if not route:
+        raise HTTPException(502, "routing service unavailable")
+    return route
+
+
+@app.get("/api/proposals")
+async def proposals_api():
+    from expressbus.eval.proposals import all_proposals
+
+    return await asyncio.to_thread(all_proposals)
 
 
 @app.get("/api/diagnose/supply_demand")
