@@ -5,6 +5,15 @@ const VEHICLE_POLL_MS = 15000;
 const ANIMATE_MS = 1000;
 const STOPS_MIN_ZOOM = 14;
 const BUS_COLOR = getComputedStyle(document.documentElement).getPropertyValue("--bus").trim();
+const LABEL_MIN_ZOOM = 13;
+// City bus lines have no official colours (livemap.vag.de draws them all grey). There are
+// ~50 of them, so colours repeat: each line gets a fixed slot by its rank in the sorted
+// line list (neighbouring numbers usually serve the same district and get different
+// colours). Identity is carried by the line labels and hover highlight, not colour alone.
+const BUS_PALETTE = [
+  "#2a78d6", "#d95926", "#13915f", "#b5338a", "#7a5c00", "#4a3aa7", "#c0392b", "#0f7c8c",
+  "#8e44ad", "#5b7a00", "#a0522d", "#1c5cab", "#d4477a", "#2e7d32", "#6d4c41", "#00838f",
+];
 
 const map = L.map("map", { preferCanvas: true, zoomControl: false }).setView([49.4521, 11.0767], 13);
 L.control.zoom({ position: "topright" }).addTo(map);
@@ -21,6 +30,7 @@ L.control.layers(basemaps, null, { position: "topright" }).addTo(map);
 map.createPane("network").style.zIndex = 350;
 map.createPane("stops").style.zIndex = 450;
 map.createPane("trip").style.zIndex = 420;
+map.createPane("labels").style.zIndex = 430;
 
 const layers = {
   "net-Regio": L.layerGroup(),
@@ -31,7 +41,10 @@ const layers = {
 };
 const vehicleLayer = L.layerGroup().addTo(map);
 const tripLayer = L.layerGroup().addTo(map);
+const labelLayer = L.layerGroup().addTo(map);
+const lineLabels = [];
 const lineColor = {};      // line -> official color (rail)
+const busColor = {};       // line -> assigned color (city bus)
 const lineFeatures = {};   // line -> [L.Polyline]
 let trips = [];
 const markers = new Map(); // trip id -> L.marker
@@ -47,7 +60,15 @@ function textColorFor(hex) {
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#0b0b0b" : "#ffffff";
 }
-const colorOf = (t) => (t.product === "Bus" ? BUS_COLOR : lineColor[t.line] || "#52514e");
+function busColorOf(line) {
+  if (!busColor[line]) {  // lines not in the static network (e.g. replacement services)
+    let h = 0;
+    for (const ch of line) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    busColor[line] = BUS_PALETTE[h % BUS_PALETTE.length];
+  }
+  return busColor[line];
+}
+const colorOf = (t) => (t.product === "Bus" ? busColorOf(t.line) : lineColor[t.line] || "#52514e");
 
 function delayStatus(trip, delay) {
   if (!trip.realtime) return "none";
@@ -89,6 +110,9 @@ async function loadNetwork() {
     const p = f.properties;
     if (p.color) lineColor[p.line] = p.color;
   }
+  const busLines = [...new Set(net.features.filter((f) => f.properties.product === "Bus" && f.properties.operator === "vag")
+    .map((f) => f.properties.line))].sort((a, b) => a.localeCompare(b, "de", { numeric: true }));
+  busLines.forEach((l, i) => { busColor[l] = BUS_PALETTE[i % BUS_PALETTE.length]; });
   // draw regional first so city lines sit on top
   const order = { vgn: 0, Bus: 1, Tram: 2, UBahn: 3 };
   net.features.sort((a, b) => (order[a.properties.operator === "vgn" ? "vgn" : a.properties.product]) - (order[b.properties.operator === "vgn" ? "vgn" : b.properties.product]));
@@ -98,16 +122,53 @@ async function loadNetwork() {
     const style = p.product === "UBahn" ? { color: p.color, weight: 5, opacity: 0.9 }
       : p.product === "Tram" ? { color: p.color, weight: 4, opacity: 0.85 }
       : regio ? { color: "#b9bec8", weight: 1.5, opacity: 0.8, dashArray: "4 4" }
-      : { color: "#6b7689", weight: 2.5, opacity: 0.75 };
+      : { color: busColor[p.line], weight: 3, opacity: 0.8 };
     const layer = L.geoJSON(f, { style: { ...style, pane: "network" } });
     layer.bindTooltip(`${p.product === "UBahn" ? "" : p.product + " "}${p.line}${regio ? " (VGN)" : ""}`, { sticky: true });
     layer.on("click", () => setLine(p.line));
     layer._baseStyle = style;
     layers[regio ? "net-Regio" : `net-${p.product}`].addLayer(layer);
+    if (!regio) addLineLabels(f, p, style.color);
     (lineFeatures[p.line] ||= []).push(layer);
   }
   for (const [k, lg] of Object.entries(layers)) if (k !== "stops" && document.querySelector(`[data-layer="${k}"]`).checked) lg.addTo(map);
+  updateLabelVisibility();
 }
+
+// Line-number badges at 25 % and 75 % along each line (shown from LABEL_MIN_ZOOM).
+function addLineLabels(f, p, color) {
+  const parts = f.geometry.type === "LineString" ? [f.geometry.coordinates] : f.geometry.coordinates;
+  const pts = parts.flat();
+  const dist = [0];
+  for (let i = 1; i < pts.length; i++) dist.push(dist[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = dist[dist.length - 1];
+  if (!total) return;
+  const cls = p.product.toLowerCase();
+  for (const frac of [0.25, 0.75]) {
+    const i = dist.findIndex((d) => d >= total * frac);
+    const [lon, lat] = pts[Math.max(0, i)];
+    const label = L.marker([lat, lon], {
+      icon: L.divIcon({
+        className: "line-label-icon",
+        html: `<div class="line-label ${cls}" style="--c:${color};--fg:${textColorFor(color)}">${esc(p.line)}</div>`,
+        iconSize: null, iconAnchor: [12, 9],
+      }),
+      pane: "labels", keyboard: false,
+    });
+    label.on("click", () => setLine(p.line));
+    label._line = p.line;
+    lineLabels.push({ marker: label, layer: `net-${p.product}` });
+  }
+}
+function updateLabelVisibility() {
+  const zoomOk = map.getZoom() >= LABEL_MIN_ZOOM;
+  for (const { marker, layer } of lineLabels) {
+    const want = zoomOk && map.hasLayer(layers[layer]) && (!selectedLine || marker._line === selectedLine);
+    if (want && !map.hasLayer(marker)) labelLayer.addLayer(marker);
+    if (!want && map.hasLayer(marker)) labelLayer.removeLayer(marker);
+  }
+}
+map.on("zoomend", updateLabelVisibility);
 
 async function loadStops() {
   const stops = await (await fetch("/api/stops")).json();
@@ -282,10 +343,11 @@ function setLine(line) {
     for (const f of feats) {
       const base = f._baseStyle;
       f.setStyle(selectedLine && l !== selectedLine ? { ...base, opacity: 0.15 }
-        : selectedLine ? { ...base, weight: base.weight + 3, opacity: 1, color: base.color === "#6b7689" || base.color === "#b9bec8" ? BUS_COLOR : base.color } : base);
+        : selectedLine ? { ...base, weight: base.weight + 3, opacity: 1, color: base.color === "#b9bec8" ? BUS_COLOR : base.color } : base);
       if (selectedLine === l) f.bringToFront();
     }
   }
+  updateLabelVisibility();
   animate();
 }
 document.getElementById("line-filter").addEventListener("change", (e) => setLine(e.target.value || selectedLine));
@@ -293,6 +355,7 @@ document.querySelectorAll("[data-layer]").forEach((cb) => cb.addEventListener("c
   const k = cb.dataset.layer;
   if (k === "stops") return updateStopsVisibility();
   cb.checked ? layers[k].addTo(map) : map.removeLayer(layers[k]);
+  updateLabelVisibility();
 }));
 document.querySelectorAll("[data-veh]").forEach((cb) => cb.addEventListener("change", animate));
 
