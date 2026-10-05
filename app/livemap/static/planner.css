@@ -99,3 +99,10 @@ input, select { font: inherit; padding: 4px 6px; border: 1px solid var(--border)
 .station-dot { cursor: pointer; }
 .express-label { background: #4a3aa7; color: #fff; font-weight: 700; font-size: 11px; padding: 1px 5px; border-radius: 3px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); white-space: nowrap; }
 .map-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: #4a3aa7; color: #fff; padding: 6px 12px; border-radius: 16px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+
+/* live vehicles in the planner */
+.veh-removed { opacity: .35; filter: grayscale(1); }
+.live-badge { background: rgba(255,255,255,.92); border-radius: 14px; padding: 4px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.2); color: var(--text-secondary); }
+.live-badge b { color: var(--text-primary); }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #0ca30c; margin-right: 6px; animation: blink 2s infinite; }
+@keyframes blink { 50% { opacity: .3; } }

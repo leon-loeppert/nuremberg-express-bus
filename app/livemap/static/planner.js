@@ -23,53 +23,80 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19, className: "tiles-grey",
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Timetable: VGN GTFS (CC BY 3.0 DE)',
 }).addTo(map);
-map.createPane("net").style.zIndex = 350;
-map.createPane("fx").style.zIndex = 420;
+map.createPane("halo").style.zIndex = 340; // scenario effects glow under the coloured lines
+map.createPane("fx").style.zIndex = 425;
 map.createPane("st").style.zIndex = 450;
-const netLayers = {}; // "Product:Line" -> [L.GeoJSON]
+const haloLayer = L.layerGroup().addTo(map);
 const fxLayer = L.layerGroup().addTo(map);
 const stationLayer = L.layerGroup();
 let hintEl = null;
 
-const baseStyle = (p) => p.product === "UBahn" ? { color: p.color, weight: 4, opacity: 0.55 }
-  : p.product === "Tram" ? { color: p.color, weight: 3, opacity: 0.5 }
-  : { color: "#8a94a6", weight: 2, opacity: 0.55 };
-
-async function loadNetwork() {
-  const net = await (await fetch("/api/network")).json();
-  for (const f of net.features) {
-    const p = f.properties;
-    if (p.operator === "vgn") continue;
-    const layer = L.geoJSON(f, { style: { ...baseStyle(p), pane: "net" } }).addTo(map);
-    layer._base = baseStyle(p);
-    layer.bindTooltip(`${p.product === "UBahn" ? "" : p.product + " "}${p.line}`, { sticky: true });
-    (netLayers[`${p.product}:${p.line}`] ||= []).push(layer);
-  }
-}
+// Same coloured network and live vehicles as the live map; vehicles of lines the scenario
+// removes are faded so you can see what would be missing on the street right now.
+const refMatches = (ref, product, line) => {
+  const [p, l] = ref.split(":");
+  return p === product && (l === "*" || l === line);
+};
+const removedBy = (product, line) => features.find((f) => f.enabled && f.type === "remove_line" && refMatches(f.line, product, line));
+const net = NetMap.create(map, {
+  vehicleClass: (t) => (removedBy(t.product, t.line) ? "veh-removed" : ""),
+  tripNote: (t) => (removedBy(t.product, t.line) ? '<p class="meta" style="color:#a12a2a">✗ Not running in your scenario</p>' : ""),
+  onStats: (s) => {
+    liveBadge.innerHTML = `<i class="live-dot"></i>Live · <b>${s.total}</b> vehicles <span class="muted">(${s.byProduct.Bus} bus · ${s.byProduct.Tram} tram · ${s.byProduct.UBahn} U)</span>`;
+  },
+});
+const liveBadge = L.DomUtil.create("div", "live-badge");
+const LiveControl = L.Control.extend({ onAdd: () => liveBadge });
+new LiveControl({ position: "bottomleft" }).addTo(map);
+liveBadge.textContent = "Live vehicles loading…";
+L.control.layers(null, {
+  "U-Bahn lines": net.layers["net-UBahn"], "Tram lines": net.layers["net-Tram"], "Bus lines": net.layers["net-Bus"],
+  "Regional buses (VGN)": net.layers["net-Regio"], "Live vehicles": net.vehicleLayer,
+}, { position: "topright" }).addTo(map);
+map.on("overlayadd overlayremove", () => net.updateLabels());
 
 function styleLines() {
-  for (const ls of Object.values(netLayers)) for (const l of ls) l.setStyle(l._base);
+  const focus = document.getElementById("focus-changes").checked;
+  const active = features.filter((f) => f.enabled);
+  const touched = new Set();
+  const refsOf = (f) => [f.line, f.line_a, f.line_b].filter(Boolean);
+  for (const [key, ls] of Object.entries(net.lineFeatures)) {
+    const [product, line] = key.split(":");
+    if (active.some((f) => refsOf(f).some((r) => refMatches(r, product, line)))) touched.add(key);
+  }
+  const fade = focus && active.length > 0;
+  for (const [key, ls] of Object.entries(net.lineFeatures)) {
+    for (const l of ls) l.setStyle(fade && !touched.has(key) ? { ...l._baseStyle, opacity: 0.18 } : l._baseStyle);
+  }
+  net.setLabelFilter(fade ? (p, l) => touched.has(`${p}:${l}`) : null);
+  haloLayer.clearLayers();
   fxLayer.clearLayers();
-  const paint = (ref, style) => {
-    const [prod, line] = ref.split(":");
-    for (const [k, ls] of Object.entries(netLayers)) {
-      if (line === "*" ? k.startsWith(prod + ":") : k === ref) for (const l of ls) { l.setStyle({ ...l._base, ...style }); l.bringToFront(); }
+  const paint = (ref, halo, line = {}) => {
+    for (const [key, ls] of Object.entries(net.lineFeatures)) {
+      const [product, ln] = key.split(":");
+      if (!refMatches(ref, product, ln)) continue;
+      for (const l of ls) {
+        l.setStyle({ ...l._baseStyle, ...line });
+        L.geoJSON(l.toGeoJSON(), { style: { color: halo, weight: l._baseStyle.weight + 9, opacity: 0.35, pane: "halo" }, interactive: false }).addTo(haloLayer);
+      }
     }
   };
-  for (const f of features.filter((f) => f.enabled)) {
-    if (f.type === "remove_line") paint(f.line, { color: COLORS.removed, dashArray: "4 6", opacity: 0.9, weight: 3 });
-    if (f.type === "thin_line") paint(f.line, { color: COLORS.thinned, dashArray: "8 4", opacity: 0.8 });
-    if (f.type === "speedup") paint(f.line, { color: COLORS.speedup, weight: 5, opacity: 0.85 });
-    if (f.type === "interline" || f.type === "debunch") { paint(f.line_a, { color: COLORS.merged, weight: 5, opacity: 0.85 }); paint(f.line_b, { color: COLORS.merged, weight: 5, opacity: 0.85 }); }
+  for (const f of active) {
+    if (f.type === "remove_line") paint(f.line, COLORS.removed, { dashArray: "2 8", opacity: 0.6 });
+    if (f.type === "thin_line") paint(f.line, COLORS.thinned, { dashArray: "10 6" });
+    if (f.type === "speedup") paint(f.line, COLORS.speedup);
+    if (f.type === "interline" || f.type === "debunch") { paint(f.line_a, COLORS.merged); paint(f.line_b, COLORS.merged); }
     if (f.type === "shorten_line") {
-      paint(f.line, { color: COLORS.shortened, weight: 4, opacity: 0.85 });
+      paint(f.line, COLORS.shortened);
       const s = stationById[f.at_station];
       if (s) L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "", html: '<div class="express-label" style="background:#eb6834">✂ cut</div>', iconSize: null }), pane: "fx" }).addTo(fxLayer);
     }
     if (f.type === "add_express") drawExpress(f.stations, f.name, false);
   }
   if (draft) drawExpress(draft.stations, draft.name || "new", true);
+  net.animate(); // re-class vehicles of removed lines
 }
+document.getElementById("focus-changes").addEventListener("change", styleLines);
 
 function drawExpress(ids, name, isDraft) {
   const pts = ids.map((id) => stationById[id]).filter(Boolean).map((s) => [s.lat, s.lon]);
@@ -489,7 +516,7 @@ function renderKpis(r) {
   meta = await (await fetch(`/api/planner/meta?day=${DAY}`)).json();
   for (const l of meta.lines) lineById[l.id] = l;
   for (const s of meta.stations) stationById[s.id] = s;
-  await loadNetwork();
+  await net.start();
   buildStationLayer();
   renderAddButtons();
   renderPresets();
