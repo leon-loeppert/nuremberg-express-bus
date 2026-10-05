@@ -1,0 +1,23 @@
+# Data
+pandas
+numpy
+gtfs-kit
+geopandas
+shapely
+requests
+# Optimisation
+ortools
+pulp
+networkx
+# Viz / demo
+streamlit
+plotly
+folium
+streamlit-folium
+# AI
+anthropic
+python-dotenv
+# Dev
+jupyterlab
+pytest
+ruff
