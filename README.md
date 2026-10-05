@@ -55,7 +55,39 @@ by delay. Inspired by https://livemap.vag.de, which shows only U-Bahn/tram; this
   (cached in `data/processed/osrm_cache.json`), and only then a straight line.
 - **Limitations:** occupancy (`Besetztgrad`) is currently always "Unbekannt".
 
+## Network planner and historical evaluation
+`http://localhost:8000/planner`: switch scenario features on and off, watch the **driver inventory**,
+then evaluate the scenario against the current timetable over a past period (default: the week
+of 28 Sep – 4 Oct 2026).
+
+- **Timetable:** VGN GTFS (`python -m expressbus.eval.timetable` downloads and preprocesses it).
+  VAG lines (U-Bahn, tram, bus) can be edited. S-Bahn trains in the area stay as fixed background.
+- **Driver inventory** (`src/expressbus/eval/resources.py`): the GTFS has no vehicle rotations,
+  so they are rebuilt by chaining trips at their terminus (min. 5 min layover). Each rotation =
+  one vehicle out = one driver on duty; U2/U3 are driverless. Budgets: **drivers at peak** and
+  **driver hours/day** per pool (bus, tram, U-Bahn). Capacity = current timetable = 100 %.
+- **Features** (`src/expressbus/eval/scenario.py`): remove line, thin out trips in a time window,
+  shorten line at a station, speed up line (bus priority), merge lines that share a terminus
+  (vehicles and passengers ride through), interleave two lines on a shared section, add an
+  express line (stops clicked on the map, running times from OSRM).
+- **KPIs** (`src/expressbus/eval/kpis.py`), per day, then aggregated over the period:
+  - travel time PT vs. car (median ratio, share of trips where PT ≤ 1.5× car), avg. PT time,
+    transfers, unreachable share. Fixed seeded sample: 400 station pairs × 6 departure times/day,
+    planned with a connection-scan journey planner. Car = OSRM free-flow × time-of-day
+    congestion + 5 min access.
+  - service pattern 06–21 h per stop-to-stop section: expected wait, overlapping departures
+    (< 2 min apart), time without service (gaps > 20 min).
+  - delay and punctuality: observed per line from the recorded live data, weighted by the
+    scenario's trips.
+  - resources: drivers at peak, driver hours, vehicle-km, trips.
+- CLI: `python -m expressbus.eval.engine 2026-09-28 7 scenario.json`
+
+**Assumptions to keep in mind:** the OD sample uses stop activity as a stand-in for demand (no
+passenger counts yet). Car congestion factors are estimates. Delays only exist from the day
+recording started, so they are a line-level model, not a replay of last week.
+
 ## Possible data sources
+- VGN GTFS timetable (CC BY 3.0 DE): https://www.vgn.de/opendata/GTFS.zip
 - VAG PULS API (live departures/trips): https://start.vag.de/dm/api/v1
 - VGN GTFS open data (Nuremberg timetables): https://www.vgn.de/opendata
 - OpenStreetMap road network

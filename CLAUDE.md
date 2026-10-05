@@ -12,3 +12,5 @@ so Nuremberg can run extra express buses with little or no additional driver sta
   Data client in `src/expressbus/data/vag.py`, poller in `src/expressbus/live/tracker.py`,
   frontend is plain Leaflet in `app/livemap/static/`.
 - Visual checks: Playwright + Chromium are installed in the venv (headless screenshots).
+- Planner/evaluation: `src/expressbus/eval/` (timetable → scenario → resources/kpis → engine).
+  UI at `/planner` (`app/livemap/static/planner.*`). Reference week: 2026-09-28..10-04.

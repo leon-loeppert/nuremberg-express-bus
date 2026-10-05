@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nuremberg Network Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/planner.css" />
+</head>
+<body class="planner">
+  <aside id="left" class="panel">
+    <header>
+      <h1>Network Planner</h1>
+      <p class="muted">Free up drivers, then spend them on new service. <a href="/">Live map →</a></p>
+    </header>
+
+    <section>
+      <h2>Scenario</h2>
+      <ul id="features" class="features"></ul>
+      <p id="no-features" class="muted small">No changes yet — add one below or enable a preset.</p>
+    </section>
+
+    <section>
+      <h2>Add a change</h2>
+      <div class="add-grid" id="add-buttons"></div>
+      <form id="feature-form" class="feature-form hidden"></form>
+    </section>
+
+    <section>
+      <h2>Presets</h2>
+      <ul id="presets" class="presets"></ul>
+    </section>
+  </aside>
+
+  <main id="map"></main>
+
+  <aside id="right" class="panel">
+    <section id="inventory">
+      <div class="inv-head">
+        <h2>Driver inventory</h2>
+        <span class="muted small" id="inv-day"></span>
+      </div>
+      <div class="capacity">
+        <div class="cap-value"><span id="cap-pct">100</span><small>%</small></div>
+        <div class="cap-label">
+          <b>Bus driver capacity in use</b>
+          <span id="cap-status" class="status good">✓ Within budget</span>
+        </div>
+      </div>
+      <div id="pools"></div>
+      <figure class="profile">
+        <figcaption>Bus drivers on duty over the day</figcaption>
+        <div class="legend-row">
+          <span><i class="swatch base"></i>Current</span>
+          <span><i class="swatch scen"></i>Scenario</span>
+          <span><i class="swatch cap"></i>Drivers available</span>
+        </div>
+        <div id="profile-chart"></div>
+      </figure>
+      <div id="toasts"></div>
+    </section>
+
+    <section id="evaluation">
+      <h2>Historical evaluation</h2>
+      <div class="eval-controls">
+        <label>From <input type="date" id="eval-start" value="2026-09-28" /></label>
+        <label>Days <input type="number" id="eval-days" value="7" min="1" max="14" /></label>
+        <button id="eval-run" class="primary">Evaluate ▶</button>
+      </div>
+      <p class="muted small" id="eval-status">Compares today's timetable (VGN GTFS) with your scenario over the period.</p>
+      <table id="kpi-table" class="kpis hidden">
+        <thead><tr><th>KPI</th><th>Current</th><th>Scenario</th><th>Change</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="muted small" id="eval-notes"></p>
+    </section>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/planner.js"></script>
+</body>
+</html>

@@ -10,12 +10,14 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from expressbus.data.vag import NETWORK_FILE, PULS_BASE, ROOT, STOPS_FILE, ensure_network
 from expressbus.live.routing import Router
@@ -34,8 +36,10 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(ensure_network)
     tracker.router = Router(NETWORK_FILE, OSRM_CACHE)
     task = asyncio.create_task(tracker.run())
+    warm = asyncio.create_task(asyncio.to_thread(_warm_planner))
     yield
     task.cancel()
+    warm.cancel()
 
 
 app = FastAPI(title="Nuremberg live map", lifespan=lifespan)
@@ -85,6 +89,64 @@ async def departures(vgn_id: int, limit: int = 10):
         }
         for a in r.json().get("Abfahrten", [])
     ]
+
+
+# ---------- scenario planner ----------
+DEFAULT_DAY = date(2026, 9, 28)  # Monday of the reference week
+_eval_lock = asyncio.Lock()
+
+
+def _warm_planner():
+    """Prepare GTFS + baseline of the reference week in the background."""
+    from expressbus.eval import engine
+    from expressbus.eval.meta import planner_meta
+    from expressbus.eval.timetable import preprocess
+
+    preprocess()
+    planner_meta(DEFAULT_DAY)
+    engine.inventory(DEFAULT_DAY, [])
+    engine.evaluate(DEFAULT_DAY, 7, [])
+    logging.getLogger(__name__).info("planner baseline ready")
+
+
+class InventoryRequest(BaseModel):
+    day: date = DEFAULT_DAY
+    features: list[dict] = []
+
+
+class EvaluateRequest(BaseModel):
+    start: date = DEFAULT_DAY
+    days: int = 7
+    features: list[dict] = []
+
+
+@app.get("/planner")
+def planner_page():
+    return FileResponse(STATIC / "planner.html")
+
+
+@app.get("/api/planner/meta")
+async def planner_meta_api(day: date = DEFAULT_DAY):
+    from expressbus.eval.meta import planner_meta
+
+    return await asyncio.to_thread(planner_meta, day)
+
+
+@app.post("/api/planner/inventory")
+async def planner_inventory(req: InventoryRequest):
+    from expressbus.eval import engine
+
+    return await asyncio.to_thread(engine.inventory, req.day, req.features)
+
+
+@app.post("/api/planner/evaluate")
+async def planner_evaluate(req: EvaluateRequest):
+    from expressbus.eval import engine
+
+    if not 1 <= req.days <= 14:
+        raise HTTPException(400, "days must be 1-14")
+    async with _eval_lock:
+        return await asyncio.to_thread(engine.evaluate, req.start, req.days, req.features)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

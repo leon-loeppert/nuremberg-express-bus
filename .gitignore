@@ -8,3 +8,6 @@ __pycache__/
 data/raw/*
 data/processed/*
 !data/**/.gitkeep
+
+# local screenshots
+Screenshot*.png
