@@ -215,3 +215,5 @@ async def diagnose_layer(key: str, bus_only: bool = True):
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+# project overview page (docs/index.html)
+app.mount("/about", StaticFiles(directory=ROOT / "docs", html=True), name="about")

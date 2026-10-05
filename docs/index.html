@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Express buses without hiring – Nuremberg</title>
+<style>
+  :root {
+    --surface: #fcfcfb; --surface-2: #f3f2ef; --border: #e2e1dc;
+    --text: #0b0b0b; --text-2: #52514e; --muted: #7a7974;
+    --accent: #2a78d6; --express: #4a3aa7; --good: #0ca30c; --good-ink: #006300; --bad-ink: #a12a2a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); background: var(--surface); }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 40px; line-height: 1.1; margin: 8px 0 12px; letter-spacing: -.01em; }
+  h2 { font-size: 24px; margin: 56px 0 12px; }
+  h3 { font-size: 17px; margin: 0 0 6px; }
+  p { margin: 0 0 12px; color: var(--text-2); }
+  .eyebrow { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+  .lead { font-size: 19px; color: var(--text-2); max-width: 760px; }
+  .verdict { margin-top: 28px; border: 1px solid #b8dcb0; background: #f3f8ee; border-radius: 14px; padding: 20px 22px; }
+  .verdict .head { font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+  .verdict .head span { color: var(--good-ink); }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .tile { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .tile .label { font-size: 13px; color: var(--text-2); }
+  .tile .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .tile .sub { font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .card p { font-size: 15px; margin: 0; }
+  .step { display: grid; grid-template-columns: 300px 1fr; gap: 22px; align-items: start; margin: 22px 0; }
+  .step img { width: 100%; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; margin-right: 8px; }
+  .pipeline { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px; }
+  .pipeline div { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13px; color: var(--text-2); position: relative; }
+  .pipeline div b { display: block; color: var(--text); font-size: 14px; margin-bottom: 4px; }
+  .pipeline div:not(:last-child)::after { content: "→"; position: absolute; right: -9px; top: 40%; color: var(--muted); font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--surface-2); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); background: var(--surface-2); }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 4px; color: #fff; background: var(--express); }
+  .gain { color: var(--good-ink); font-weight: 600; }
+  .cost { color: var(--bad-ink); font-weight: 600; }
+  ul.clean { padding-left: 20px; color: var(--text-2); margin: 0; }
+  ul.clean li { margin: 4px 0; }
+  code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  pre { background: #1a1a19; color: #f3f2ef; padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 14px; }
+  footer { margin-top: 64px; font-size: 13px; color: var(--muted); }
+  @media (max-width: 760px) {
+    .tiles, .grid2, .grid3, .pipeline { grid-template-columns: 1fr 1fr; }
+    .step { grid-template-columns: 1fr; }
+    h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Fraunhofer IIS Hackathon · Track 1</div>
+  <h1>Express buses for Nuremberg, without hiring a single extra driver</h1>
+  <p class="lead">Nuremberg has the buses for more express services, but not the drivers. This tool finds express lines worth running,
+    and shows where to take the drivers from so that the total stays the same and passengers still come out ahead.</p>
+
+  <section class="verdict">
+    <div class="head"><span>✓ Yes:</span> three express lines fit into today's driver budget</div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Bus drivers at peak</div><div class="value">272 → 272</div><div class="sub">no new hires</div></div>
+      <div class="tile"><div class="label">Trips where PT ≤ 1.5× car</div><div class="value">16.8 → 17.2 %</div><div class="sub">demand-weighted</div></div>
+      <div class="tile"><div class="label">Trips that get faster</div><div class="value">4.5 %</div><div class="sub">by 5.4 min on average</div></div>
+      <div class="tile"><div class="label">Passenger time saved</div><div class="value">≈ 800 h</div><div class="sub">per weekday*</div></div>
+    </div>
+    <p class="note">Model result for a weekday of the reference week 28 Sep – 4 Oct 2026. 3.6 % of trips get slower, by 3.6 min on average, because
+      the drivers come from thinner bus service elsewhere. *Scaled to roughly 450,000 VAG trips per weekday. Demand is estimated, not counted (see limitations).</p>
+  </section>
+
+  <h2>The problem</h2>
+  <div class="grid3">
+    <div class="card"><h3>Too few drivers</h3><p>Every extra bus on the road needs a driver at the same moment. The morning and afternoon peaks are the bottleneck, not total hours.</p></div>
+    <div class="card"><h3>Slow cross-town trips</h3><p>On a typical trip in Nuremberg, public transport takes about twice as long as the car door to door. Only one trip in six is competitive.</p></div>
+    <div class="card"><h3>Uneven supply</h3><p>The network is dense where U-Bahn and tram already run, and thin elsewhere. About 40 % of VAG bus capacity runs where rail already serves.</p></div>
+  </div>
+
+  <h2>Who it's for</h2>
+  <div class="grid2">
+    <div class="card"><h3>Network and service planners</h3><p>Get concrete, costed express-line proposals and check any change (remove, thin, speed up, merge, add a line) against a full week of the real timetable.</p></div>
+    <div class="card"><h3>Decision makers</h3><p>See one answer, "can we do it with the drivers we have?", with the trade-off spelled out: who gains, who loses, and by how much.</p></div>
+  </div>
+
+  <h2>What it does: three steps</h2>
+  <div class="step">
+    <img src="img/live.jpg" alt="Live map with buses, trams and U-Bahn" />
+    <div><h3><span class="num">1</span>Live: what runs now</h3>
+      <p>Every bus, tram and U-Bahn in Nuremberg on one map, moving along the streets in real time and coloured by delay. VAG's own live map shows only rail. Every finished trip is recorded, so delay data builds up over time.</p></div>
+  </div>
+  <div class="step">
+    <img src="img/express-check.jpg" alt="Express check page with verdict and proposed lines" />
+    <div><h3><span class="num">2</span>Express check: where it pays off</h3>
+      <p>The tool searches the whole city for corridors where many people travel and public transport is much slower than the car. For each corridor it builds an express line that follows real streets and costs it in drivers. It then funds the lines from bus service that duplicates rail, choosing the cuts that hurt passengers least. The result is a single verdict and a ready-made package.</p></div>
+  </div>
+  <div class="step">
+    <img src="img/planner.jpg" alt="Planner with driver inventory and scenario" />
+    <div><h3><span class="num">3</span>Plan: try it yourself</h3>
+      <p>Open the package in the planner, or build your own scenario. A game-like driver inventory updates instantly (100 % = today's drivers). One click replays last week's timetable with and without your changes and compares travel times, waits, delays and resources.</p></div>
+  </div>
+
+  <h2>The proposed package</h2>
+  <table>
+    <thead><tr><th>Change</th><th>Where</th><th class="n">Drivers</th><th class="n">Passenger time / weekday</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag">X1</span> new express</td><td>Fürth Sonnenstr. – Fürth Stadtgrenze – Muggenhof – Waldemar-Klink-Str. (7.6 km, ~18 min)</td><td class="n cost">−5</td><td class="n gain">≈ +1,030 h</td></tr>
+      <tr><td><span class="tag">X3</span> new express</td><td>Stephanstr. – Wöhrder Wiese – Rathenauplatz – Waldemar-Klink-Str. (5.8 km, ~15 min)</td><td class="n cost">−5</td><td class="n gain">≈ +500 h</td></tr>
+      <tr><td><span class="tag">X4</span> new express</td><td>Stephanstr. – Hbf – Plärrer – Scheinfelder Str. (7.1 km, ~17 min)</td><td class="n cost">−5</td><td class="n gain">≈ +410 h</td></tr>
+      <tr><td>Thin bus 32, 55, 45, 94, 37, 73, 43</td><td>every 2nd trip 06–20 h, mostly where rail runs in parallel</td><td class="n gain">+14</td><td class="n cost">≈ −980 h</td></tr>
+      <tr><td>Remove bus 84</td><td>99 % of its capacity runs next to rail</td><td class="n gain">+1</td><td class="n">≈ 0 h</td></tr>
+      <tr><th>Net</th><th></th><th class="n">± 0</th><th class="n">≈ +800 h</th></tr>
+    </tbody>
+  </table>
+  <p class="note">Express lines run every 15 minutes, Mon–Fri 06–20 h. The individual effects don't add up exactly because changes interact; the net figure is measured on the combined package.</p>
+
+  <h2>How it works</h2>
+  <div class="pipeline">
+    <div><b>Data</b>VGN timetable, VAG real-time API, Zensus 2022 residents, OpenStreetMap roads</div>
+    <div><b>Demand</b>1 km zones; trips ∝ residents × stop activity × distance decay</div>
+    <div><b>Corridors</b>Relations ≥ 4 km where PT is far slower than the car, weighted by demand</div>
+    <div><b>Express lines</b>Street-routed, timed with rush-hour traffic, costed in drivers</div>
+    <div><b>Verdict</b>Fund with the least harmful cuts, re-plan every trip, check the driver budget</div>
+  </div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><h3>Driver model</h3><p>The timetable doesn't say which bus does which trip, so trips are chained into vehicle rotations at their end stops (min. 5 min break). Each running vehicle needs one driver, and U2/U3 run without drivers. Budgets: drivers at peak and driver hours per day.</p></div>
+    <div class="card"><h3>Journey planner</h3><p>A connection-scan planner computes door-to-door times for all ~76,000 zone-to-zone relations: walk to the stop, wait, ride and transfer. Car times come from OSRM road routing plus time-of-day congestion and 5 min for parking.</p></div>
+    <div class="card"><h3>Express lines</h3><p>Each line starts and ends at the stops carrying most of the corridor's lost time and stops at up to two transfer hubs on the way. Its route comes from OSRM over real streets, and its timetable is computed from that same route.</p></div>
+    <div class="card"><h3>Funding</h3><p>Candidate cuts are bus lines that largely run where rail already serves. Each is scored by passenger time lost per driver freed, and the cheapest ones are used until the package is driver-neutral.</p></div>
+  </div>
+
+  <h2>Limitations</h2>
+  <ul class="clean">
+    <li><b>Demand is estimated</b> from residents and stop activity, not from passenger counts. Jobs, schools and shops only enter indirectly. Real passenger or OD data would be the biggest improvement.</li>
+    <li><b>Delays</b> come only from the days the live data was recorded. Before that there is no history.</li>
+    <li><b>Rotations are rebuilt heuristically</b>, not taken from VAG's real duty schedules. Labour rules (breaks, split shifts) are not modelled.</li>
+    <li><b>Express lines use fixed nominal settings</b>: every 15 min, Mon–Fri 06–20 h, a 10 % bus penalty on car speed and 30 s per stop.</li>
+  </ul>
+
+  <h2>Run it</h2>
+<pre>git clone https://github.com/leon-loeppert/nuremberg-express-bus
+cd nuremberg-express-bus
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && pip install -e .
+uvicorn app.livemap.server:app --port 8000
+# open http://localhost:8000  (1 Live · 2 Express check · 3 Plan)</pre>
+
+  <footer>
+    Data: VGN GTFS (CC BY 3.0 DE) · VAG PULS API · Zensus 2022 © Statistisches Bundesamt (dl-de/by-2-0) · © OpenStreetMap contributors (ODbL), routing via OSRM.<br />
+    Built at the Fraunhofer IIS hackathon, October 2026.
+  </footer>
+</main>
+</body>
+</html>
