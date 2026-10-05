@@ -133,6 +133,14 @@ def bunching(products=None) -> dict:
 
 
 # ---------- timetable data ----------
+def _station_lines(tt) -> dict[str, list[str]]:
+    """station -> ["Bus 36", "Tram 4", "UBahn U1", ...] (VAG lines only)."""
+    st = tt.stop_times.merge(tt.trips[tt.trips["product"].isin(EDITABLE)][["trip_id", "product", "line"]], on="trip_id")
+    lab = st["product"] + " " + st["line"]
+    return {k: sorted(set(v), key=_num) for k, v in lab.groupby(st.station)}
+
+
+
 @lru_cache(maxsize=1)
 def service_gaps() -> dict:
     tt = load_day(REFERENCE_DAY)
@@ -140,18 +148,17 @@ def service_gaps() -> dict:
     span = WINDOW[1] - WINDOW[0]
     pos = tt.stations.set_index("station")
     waits = defaultdict(list)
-    lines = defaultdict(set)
+    lines = _station_lines(tt)
     e = e[e.station.str.startswith(CITY_PREFIXES)]
     for (a, _b), g in e.groupby(["station", "to"]):
         times = np.sort(g.dep.values)
         h = np.diff(np.concatenate([[WINDOW[0]], times, [WINDOW[1]]])).astype(float)
         waits[a].append(min((h ** 2).sum() / (2 * span), 3600) / 60)
-        lines[a].update(g.line.unique())
     items = []
     for s, w in waits.items():
         v = float(np.mean(w))
         items.append({"lat": float(pos.lat[s]), "lon": float(pos.lon[s]), "value": v, "label": _short(pos.name[s]),
-                      "detail": f"{v:.1f} min expected wait", "lines": sorted(lines[s], key=_num)})
+                      "detail": f"{v:.1f} min expected wait", "lines": lines.get(s, []), "station": s})
     return _result("service_gaps", items, f"VGN timetable, Mon {REFERENCE_DAY:%d.%m.%Y}", floor=5)
 
 
@@ -175,6 +182,7 @@ def pt_vs_car() -> dict:
         pairs += [(o, d) for d in set(rng.choices(cand, w, k=12))]
     points = {s: (st.lat[s], st.lon[s]) for s in names}
     free = free_flow_matrix(points, pairs)
+    lines = _station_lines(tt)
     planner = Planner(tt)
     by_origin = defaultdict(list)
     for o in names:
@@ -188,7 +196,7 @@ def pt_vs_car() -> dict:
                 pt = min(arrival[k] - t0, 7200) if k is not None and arrival[k] < math.inf else 7200
                 by_origin[o].append(pt / car_time(free[(o, d)], t0 // 3600, weekend=False))
     items = [{"lat": float(st.lat[o]), "lon": float(st.lon[o]), "value": float(np.median(r)), "label": _short(st.name[o]),
-              "detail": f"median {np.median(r):.2f}× car time ({len(r)} trips)", "lines": []}
+              "detail": f"median {np.median(r):.2f}× car time ({len(r)} trips)", "lines": lines.get(o, []), "station": o}
              for o, r in by_origin.items()]
     return _result("pt_vs_car", items, f"VGN timetable Mon {REFERENCE_DAY:%d.%m.%Y}, car: OSRM + congestion", floor=1.2)
 
@@ -216,7 +224,8 @@ def parallel_rail() -> dict:
             items.append({"lat": float((pos.lat[a] + pos.lat[b]) / 2), "lon": float((pos.lon[a] + pos.lon[b]) / 2),
                           "value": float(len(g)), "label": f"{_short(pos.name[a])} → {_short(pos.name[b])}",
                           "detail": f"{len(g)} bus departures/day, parallel to {', '.join(sorted(shared, key=_num))}",
-                          "lines": [f"Bus {x}" for x in sorted(g.line.unique(), key=_num)]})
+                          "lines": [f"Bus {x}" for x in sorted(g.line.unique(), key=_num)], "station": a,
+                          "parallel_to": sorted(shared, key=_num)})
     return _result("parallel_rail", items, f"VGN timetable, Mon {REFERENCE_DAY:%d.%m.%Y}", by_line=_line_ranking(items))
 
 

@@ -104,3 +104,10 @@ details[open] > summary::before { content: "▾ "; }
 details > summary::-webkit-details-marker { display: none; }
 details[open] > summary { margin-bottom: 6px; }
 .tile .sub b { color: var(--text-primary); }
+
+/* effect chips (planner + diagnosis) */
+.chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 9px; margin-right: 4px; background: var(--surface-2); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.chip.gain { background: #e3f5e3; color: #006300; }
+.chip.cost { background: #fbe4e4; color: #a12a2a; }
+.steps a { position: relative; }
+.steps .badge { position: absolute; top: -6px; right: -4px; background: #0ca30c; color: #fff; font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 8px; }

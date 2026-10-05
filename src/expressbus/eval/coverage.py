@@ -155,7 +155,8 @@ def supply_demand() -> dict:
             grp = df[m]
             out.append({"lat": float(grp.lat.mean()), "lon": float(grp.lon.mean()), "residents": int(grp["pop"].sum()),
                         "nearest_stop_m": int(grp.nearest_m.min()), "places_per_resident": round(float(grp.total.sum() / grp["pop"].sum()), 1),
-                        "bus_lines": sorted(set().union(*map(set, grp.bus_lines)), key=_num)})
+                        "bus_lines": sorted(set().union(*map(set, grp.bus_lines)), key=_num),
+                        "lines": [f"Bus {x}" for x in sorted(set().union(*map(set, grp.bus_lines)), key=_num)]})
             if len(out) >= n:
                 break
         return sorted(out, key=lambda c: -c["residents"])

@@ -10,7 +10,7 @@
 </head>
 <body class="diagnose">
   <aside id="sidebar">
-    <nav class="steps"><a href="/"><b>1</b><span>Live</span></a><a href="/diagnose" class="active"><b>2</b><span>Diagnose</span></a><a href="/planner"><b>3</b><span>Plan</span></a></nav>
+    <nav class="steps"><a href="/"><b>1</b><span>Live</span></a><a href="/diagnose" class="active"><b>2</b><span>Diagnose</span></a><a href="/planner"><b>3</b><span>Plan</span><i id="queued" class="badge hidden"></i></a></nav>
 
     <section>
       <div id="layer-list" class="layer-list"></div>
@@ -24,30 +24,46 @@
         <label><input type="radio" name="sdmode" value="redundant" /> Bus places where rail already serves</label>
       </div>
       <div id="summary"></div>
-      <p class="lever"><b>What to do in the planner:</b> <span id="info-lever"></span></p>
     </section>
 
-    <section>
-      <h2 id="top-title">Top problem spots</h2>
+    <!-- shown when a problem spot is selected -->
+    <section id="spot" class="spot hidden">
+      <button id="spot-close" class="link back">← all problem spots</button>
+      <h3 id="spot-title"></h3>
+      <p id="spot-detail" class="muted small"></p>
+      <div id="spot-lines" class="line-chips"></div>
+      <h2>What you can do</h2>
+      <ul id="spot-suggestions" class="suggestions"></ul>
+    </section>
+
+    <section id="spots-section">
+      <h2 id="top-title">Problem spots</h2>
+      <p class="muted small">Click a spot to see the lines and stops there and what you can do.</p>
       <ol id="top-list" class="top-list"></ol>
       <button id="top-more" class="link hidden">Show more</button>
+      <h2 id="lines-title" class="mt">Lines most affected</h2>
+      <ol id="line-list" class="line-list"></ol>
     </section>
 
-    <section>
-      <h2 id="lines-title">Lines most affected</h2>
-      <ol id="line-list" class="line-list"></ol>
+    <section class="map-controls">
+      <h2>Map</h2>
+      <select id="line-filter" aria-label="Highlight a line"><option value="">Highlight a line…</option></select>
+      <label><input type="checkbox" id="fade-lines" checked /> Fade lines that are not involved</label>
+      <div class="two-col">
+        <label><input type="checkbox" data-layer="net-UBahn" checked /> U-Bahn</label>
+        <label><input type="checkbox" data-layer="net-Tram" checked /> Tram</label>
+        <label><input type="checkbox" data-layer="net-Bus" checked /> City bus</label>
+        <label><input type="checkbox" data-layer="net-Regio" /> Regional bus</label>
+        <label><input type="checkbox" id="show-stops" checked /> Stops (zoom in)</label>
+        <label><input type="checkbox" id="show-live" /> Live vehicles</label>
+        <label><input type="checkbox" id="show-problems" checked /> Problem layer</label>
+      </div>
     </section>
 
     <details>
       <summary>How this is measured</summary>
       <p class="muted small" id="info-source"></p>
       <label class="small" id="bus-only-row"><input type="checkbox" id="bus-only" checked /> Buses only (observed layers)</label>
-    </details>
-
-    <details>
-      <summary>Map layers</summary>
-      <label><input type="checkbox" id="show-network" checked /> Network lines (faded)</label>
-      <label><input type="checkbox" id="show-live" /> Live vehicles</label>
     </details>
   </aside>
   <main id="map"></main>

@@ -26,11 +26,37 @@ const canvas = L.canvas({ pane: "grid" });
 const dataLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
 
-const net = NetMap.create(map, { initialLayers: { "net-Regio": false } });
-function fadeNetwork() {
-  for (const ls of Object.values(net.lineFeatures)) for (const l of ls) l.setStyle({ ...l._baseStyle, opacity: 0.3, weight: Math.max(1.5, l._baseStyle.weight - 1) });
-  net.setLabelFilter(() => false);
+const net = NetMap.create(map, { initialLayers: { "net-Regio": false }, onLineClick: (p, l) => highlight(new Set([`${p}:${l}`])) });
+
+// ---------- line highlighting ----------
+let highlighted = null; // Set of "Product:Line" or null
+const lineKey = (label) => { const [p, ...rest] = label.split(" "); return `${p}:${rest.join(" ")}`; };
+function highlight(keys) {
+  highlighted = keys && keys.size ? keys : null;
+  const fade = document.getElementById("fade-lines").checked;
+  for (const [key, ls] of Object.entries(net.lineFeatures)) {
+    const on = highlighted?.has(key);
+    for (const l of ls) {
+      const b = l._baseStyle;
+      l.setStyle(on ? { ...b, weight: b.weight + 2, opacity: 1 }
+        : fade || highlighted ? { ...b, opacity: highlighted ? 0.15 : 0.3, weight: Math.max(1.5, b.weight - 1) } : b);
+      if (on) l.bringToFront();
+    }
+  }
+  net.setLabelFilter(highlighted ? (p, l) => highlighted.has(`${p}:${l}`) : fade ? () => false : null);
+  document.getElementById("line-filter").value = highlighted?.size === 1 ? [...highlighted][0] : "";
 }
+function fillLineFilter() {
+  const order = { UBahn: 0, Tram: 1, Bus: 2 };
+  const keys = Object.keys(net.lineFeatures).sort((a, b) => {
+    const [pa, la] = a.split(":"), [pb, lb] = b.split(":");
+    return order[pa] - order[pb] || la.localeCompare(lb, "de", { numeric: true });
+  });
+  document.getElementById("line-filter").insertAdjacentHTML("beforeend",
+    keys.map((k) => `<option value="${k}">${esc(NetMap.lineLabel(...k.split(":")))}</option>`).join(""));
+}
+document.getElementById("line-filter").addEventListener("change", (e) => highlight(e.target.value ? new Set([e.target.value]) : null));
+document.getElementById("fade-lines").addEventListener("change", () => highlight(highlighted));
 
 let meta = {}, current = null, cache = {};
 let topExpanded = false;
@@ -69,13 +95,13 @@ async function select(key) {
   document.querySelectorAll("#layer-list button").forEach((b) => b.classList.toggle("active", b.dataset.key === key));
   const m = key === "supply_demand" ? SUPPLY_DEMAND : meta[key];
   document.getElementById("info-question").textContent = m.question;
-  document.getElementById("info-lever").textContent = m.lever;
   document.getElementById("info-source").textContent = "Loading…";
   document.getElementById("bus-only-row").classList.toggle("hidden", m.source !== "observed");
   topExpanded = false;
   document.getElementById("sd-mode").classList.toggle("hidden", key !== "supply_demand");
   dataLayer.clearLayers();
   markerLayer.clearLayers();
+  closeSpot();
   document.getElementById("top-list").innerHTML = '<li class="loading">computing… (first time can take ~30 s)</li>';
   document.getElementById("line-list").innerHTML = "";
   document.getElementById("summary").innerHTML = "";
@@ -84,7 +110,26 @@ async function select(key) {
   key === "supply_demand" ? renderSupplyDemand(data) : renderHeat(data);
 }
 
-// ---------- heat layers ----------
+// ---------- problem spots ----------
+// Every layer is turned into the same spot shape so the sidebar and suggestions work alike:
+// { label, detail, valueText, lat, lon, lines: ["Bus 36", ...], station?, extra }
+let spots = [];
+function renderSpots(title) {
+  document.getElementById("top-title").textContent = title;
+  const ol = document.getElementById("top-list");
+  ol.innerHTML = spots.map((sp, i) => `<li data-i="${i}"><span class="val">${esc(sp.valueText)}</span><b>${esc(sp.label)}</b>
+    <span class="sub">${esc(sp.detail)}</span></li>`).join("");
+  ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => selectSpot(spots[+li.dataset.i])));
+  markerLayer.clearLayers();
+  spots.slice(0, TOP_N).forEach((sp, i) => {
+    const m = L.circleMarker([sp.lat, sp.lon], { radius: 10, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.95 })
+      .bindTooltip(`${i + 1}`, { permanent: true, direction: "center", className: "rank-label" });
+    m.on("click", () => selectSpot(sp));
+    markerLayer.addLayer(m);
+  });
+  limitTop();
+}
+
 function renderHeat(d) {
   document.getElementById("info-source").textContent = `${d.source} · ${d.period}`;
   L.heatLayer(d.points, { radius: 20, blur: 16, maxZoom: 14, max: 1, minOpacity: 0.25, gradient: HEAT_GRADIENT }).addTo(dataLayer);
@@ -92,34 +137,34 @@ function renderHeat(d) {
   document.getElementById("legend").innerHTML = `
     <div class="ramp" style="background:linear-gradient(90deg, ${HEAT_STOPS.map((x) => x[1]).join(",")})"></div>
     <div class="ramp-labels"><span>${fmtVal(d.scale[0])}</span><span>${esc(d.unit)}</span><span>≥ ${fmtVal(d.scale[1])}</span></div>`;
-  document.getElementById("top-title").textContent = "Top problem spots";
-  const ol = document.getElementById("top-list");
-  ol.innerHTML = d.top.map((it, i) => `<li data-i="${i}"><span class="val">${fmtVal(it.value)}</span><b>${esc(it.label)}</b>
-    <span class="sub">${esc(it.detail)}${it.lines.length ? " · " + esc(it.lines.slice(0, 6).join(", ")) : ""}</span></li>`).join("");
-  d.top.slice(0, TOP_N).forEach((it, i) => { // numbered markers only for the top spots
-    const m = L.circleMarker([it.lat, it.lon], { radius: 9, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.9 })
-      .bindTooltip(`${i + 1}`, { permanent: true, direction: "center", className: "rank-label" })
-      .bindPopup(`<div class="popup"><h3>${i + 1}. ${esc(it.label)}</h3><p class="meta">${esc(it.detail)}</p>${it.lines.length ? `<p>${esc(it.lines.join(", "))}</p>` : ""}</div>`);
-    markerLayer.addLayer(m);
-  });
-  ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
-    const it = d.top[+li.dataset.i];
-    map.flyTo([it.lat, it.lon], 15);
-    markerLayer.getLayers()[+li.dataset.i]?.openPopup();
-  }));
+  spots = d.top.map((it) => ({ ...it, kind: d.key, valueText: fmtVal(it.value) }));
+  renderSpots("Problem spots");
   renderLines(d.by_line, d.unit, "Lines most affected");
-  limitTop();
 }
 
 function renderLines(rows, unit, title) {
   document.getElementById("lines-title").textContent = title;
   if (!rows?.length) { document.getElementById("line-list").innerHTML = '<li class="muted">–</li>'; return; }
   const max = Math.max(...rows.map((r) => r.value ?? r.share));
-  document.getElementById("line-list").innerHTML = rows.slice(0, 5).map((r) => {
+  const ol = document.getElementById("line-list");
+  ol.innerHTML = rows.slice(0, 5).map((r, i) => {
     const v = r.value ?? r.share;
     const txt = r.share !== undefined ? `${Math.round(r.share * 100)} % of its places` : `${Math.round(v).toLocaleString("en")} ${esc(unit)}`;
-    return `<li><b>${esc(r.line)}</b> · ${txt}<span class="bar" style="width:${(60 * v) / max}px"></span></li>`;
+    return `<li data-i="${i}"><b>${esc(r.line)}</b> · ${txt}<span class="bar" style="width:${(60 * v) / max}px"></span></li>`;
   }).join("");
+  // a line is a spot too: select it to see the line and what to do with it
+  ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => {
+    const r = rows[+li.dataset.i];
+    selectLineSpot(r, title);
+  }));
+}
+
+function selectLineSpot(r, context) {
+  const key = lineKey(r.line);
+  const feats = net.lineFeatures[key] || [];
+  const b = feats.length ? L.featureGroup(feats).getBounds() : null;
+  const c = b?.isValid() ? b.getCenter() : map.getCenter();
+  selectSpot({ label: r.line, detail: context, valueText: "", lat: c.lat, lon: c.lng, lines: [r.line], kind: current === "supply_demand" ? "redundant_line" : `${current}_line`, extra: r, bounds: b });
 }
 
 // ---------- supply vs demand grid ----------
@@ -137,14 +182,14 @@ function renderSupplyDemand(d) {
     let style;
     if (mode === "index") {
       style = cls === "destination" ? { color: "#9a9994", weight: 0.5, fillColor: "#ffffff", fillOpacity: 0.05, dashArray: "2 3" }
-        : cls === "unserved" ? { color: UNSERVED, weight: 0.5, fillColor: UNSERVED, fillOpacity: 0.7 }
-        : { color: "#ffffff", weight: 0.5, fillColor: divColor(idx), fillOpacity: 0.65 };
+        : cls === "unserved" ? { color: UNSERVED, weight: 0.5, fillColor: UNSERVED, fillOpacity: 0.6 }
+        : { color: "#ffffff", weight: 0.5, fillColor: divColor(idx), fillOpacity: 0.55 };
     } else {
       if (!g[cols.rail_covered] || !bus) continue;
       const t = Math.log1p(bus) / Math.log1p(maxBus);
-      style = { color: "#ffffff", weight: 0.5, fillColor: t > 0.85 ? "#104281" : t > 0.7 ? "#1c5cab" : t > 0.55 ? "#3987e5" : "#9ec5f4", fillOpacity: 0.7 };
+      style = { color: "#ffffff", weight: 0.5, fillColor: t > 0.85 ? "#104281" : t > 0.7 ? "#1c5cab" : t > 0.55 ? "#3987e5" : "#9ec5f4", fillOpacity: 0.6 };
     }
-    const r = L.rectangle([[g[0], g[1]], [g[2], g[3]]], { ...style, renderer: canvas });
+    const r = L.rectangle([[g[0], g[1]], [g[2], g[3]]], { ...style, renderer: canvas, interactive: true });
     const ratio = 2 ** idx;
     r.bindTooltip(`<b>${CLASS_LABEL[cls]}</b><br>${g[cols.residents].toLocaleString("en")} residents<br>
       Places/day in reach: bus ${bus.toLocaleString("en")} · rail ${rail.toLocaleString("en")}<br>
@@ -162,30 +207,158 @@ function renderSupplyDemand(d) {
   document.getElementById("summary").innerHTML = `
     <div class="tile"><span class="label">Residents under-supplied or not served</span><span class="value">${pct(s.residents_unserved + s.residents_under)}</span><span class="sub">${(s.residents_unserved + s.residents_under).toLocaleString("en")} people</span></div>
     <div class="tile"><span class="label">VAG bus places where rail already serves</span><span class="value">${Math.round(s.bus_places_in_rail_covered * 100)} %</span><span class="sub">candidates to redistribute</span></div>`;
-  document.getElementById("top-title").textContent = "Largest under-served areas";
-  const ol = document.getElementById("top-list");
-  ol.innerHTML = d.unserved_clusters.map((c, i) => `<li data-i="${i}"><span class="val">${c.residents.toLocaleString("en")}</span><b>Area ${i + 1}</b>
-    <span class="sub">${c.places_per_resident} places/resident · nearest stop ${c.nearest_stop_m} m · bus lines: ${esc(c.bus_lines.join(", ") || "none")}</span></li>`).join("");
-  markerLayer.clearLayers();
-  d.unserved_clusters.slice(0, TOP_N).forEach((c, i) => markerLayer.addLayer(L.circleMarker([c.lat, c.lon], { radius: 9, color: "#0b0b0b", weight: 1.5, fillColor: "#fff", fillOpacity: 0.9 })
-    .bindTooltip(`${i + 1}`, { permanent: true, direction: "center", className: "rank-label" })));
-  ol.querySelectorAll("li").forEach((li) => li.addEventListener("click", () => { const c = d.unserved_clusters[+li.dataset.i]; map.flyTo([c.lat, c.lon], 15); }));
+  spots = d.unserved_clusters.map((c, i) => ({
+    label: `Under-served area ${i + 1}`, kind: "under_served", lat: c.lat, lon: c.lon, lines: c.lines,
+    valueText: `${c.residents.toLocaleString("en")} residents`,
+    detail: `${c.places_per_resident} places/resident · nearest stop ${c.nearest_stop_m} m · bus: ${c.bus_lines.join(", ") || "none"}`, extra: c,
+  }));
+  renderSpots("Largest under-served areas");
   renderLines(d.redundant_lines, "", "Bus lines mostly where rail already serves");
-  limitTop();
 }
 document.querySelectorAll('input[name="sdmode"]').forEach((r) => r.addEventListener("change", () => select("supply_demand")));
 document.getElementById("bus-only").addEventListener("change", () => select(current));
-document.getElementById("show-network").addEventListener("change", (e) => {
-  for (const k of ["net-UBahn", "net-Tram", "net-Bus"]) net.setLayer(k, e.target.checked);
-  if (e.target.checked) fadeNetwork();
-});
+
+// ---------- selected spot + suggestions ----------
+let plannerMeta = null;
+async function getPlannerMeta() {
+  plannerMeta ||= await (await fetch("/api/planner/meta")).json();
+  return plannerMeta;
+}
+function nearestStation(lat, lon, ids = null) {
+  let best = null, bd = Infinity;
+  for (const s of plannerMeta.stations) {
+    if (ids && !ids.has(s.id)) continue;
+    const d = Math.hypot((s.lat - lat) * 111.3, (s.lon - lon) * 72.4);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best && { ...best, km: bd };
+}
+const short = (n) => n.replace(/^(Nürnberg|Fürth) /, "");
+// regular bus lines only: E = rail replacement, N = night buses
+const busLines = (sp) => sp.lines.filter((l) => /^Bus [^EN]/.test(l));
+
+// Rule-based suggestions. Each one may carry a planner feature; its driver effect is computed by the server.
+function suggestionsFor(sp) {
+  const out = [];
+  const ref = lineKey;
+  const bus = busLines(sp);
+  const uStations = new Set(plannerMeta.lines.filter((l) => l.product === "UBahn").flatMap((l) => l.stations.map((s) => s.id)));
+  const feeder = () => {
+    const from = sp.station ? plannerMeta.stations.find((s) => s.id === sp.station) : nearestStation(sp.lat, sp.lon);
+    const hub = from && nearestStation(from.lat, from.lon, new Set([...uStations].filter((id) => id !== from.id)));
+    if (!from || !hub || hub.km < 1) return;
+    out.push({
+      title: `Express feeder ${short(from.name)} → ${short(hub.name)} (U-Bahn), every 15 min`,
+      why: `Direct link to the nearest U-Bahn (${hub.km.toFixed(1)} km) instead of a slow local route.`,
+      feature: { type: "add_express", name: `X-${short(from.name).slice(0, 6)}`, stations: [from.id, hub.id], headway_min: 15, from_h: 6, to_h: 20, days: "weekday" },
+    });
+  };
+  switch (sp.kind) {
+    case "delay_buildup":
+      bus.slice(0, 2).forEach((l) => out.push({
+        title: `Bus lane / signal priority for ${l}`, why: `Vehicles lose time on ${sp.label} (${sp.detail}). Faster running can save a vehicle.`,
+        feature: { type: "speedup", line: ref(l), pct: 10 },
+      }));
+      break;
+    case "bunching":
+      if (bus.length >= 2) out.push({ title: `Interleave ${bus[0]} and ${bus[1]}`, why: "Shift one timetable so the two lines don't run right behind each other.", feature: { type: "debunch", line_a: ref(bus[0]), line_b: ref(bus[1]) } });
+      bus.slice(0, 1).forEach((l) => out.push({ title: `More recovery time / headway control for ${l}`, why: "Bunching usually starts with a late bus picking up everyone. Longer turnaround buffers or headway-based dispatching help. (Operational, not in the planner.)" }));
+      break;
+    case "service_gaps":
+    case "under_served":
+      bus.slice(0, 2).forEach((l) => out.push({ title: `More trips on ${l} (06–20 h, double frequency)`, why: "Shorter waits for the people living here. Costs drivers, so pair it with a saving elsewhere.", feature: { type: "densify_line", line: ref(l), from_h: 6, to_h: 20 } }));
+      if (!bus.length) feeder();
+      break;
+    case "pt_vs_car":
+      feeder();
+      bus.slice(0, 1).forEach((l) => out.push({ title: `More trips on ${l} (06–20 h)`, why: "Shorter waits make the trip faster from here.", feature: { type: "densify_line", line: ref(l), from_h: 6, to_h: 20 } }));
+      break;
+    case "parallel_rail":
+      bus.slice(0, 2).forEach((l) => out.push({ title: `Thin ${l} to every 2nd trip 06–20 h`, why: `Rail (${(sp.parallel_to || []).join(", ")}) runs on the same section. Frees drivers for under-served areas.`, feature: { type: "thin_line", line: ref(l), from_h: 6, to_h: 20, keep_every: 2 } }));
+      break;
+    case "redundant_line":
+    case "parallel_rail_line":
+      out.push({ title: `Thin ${sp.label} to every 2nd trip 06–20 h`, why: `${sp.extra?.share ? Math.round(sp.extra.share * 100) + " % of its places are" : "Much of it runs"} where rail already serves.`, feature: { type: "thin_line", line: ref(sp.label), from_h: 6, to_h: 20, keep_every: 2 } });
+      out.push({ title: `Remove ${sp.label}`, why: "The radical option. Check the evaluation for who loses a direct connection.", feature: { type: "remove_line", line: ref(sp.label) } });
+      break;
+    default:
+      if (sp.label.startsWith("Bus ")) out.push({ title: `Bus lane / signal priority for ${sp.label}`, why: sp.detail, feature: { type: "speedup", line: ref(sp.label), pct: 10 } });
+  }
+  return out;
+}
+
+async function selectSpot(sp) {
+  await getPlannerMeta();
+  document.getElementById("spot").classList.remove("hidden");
+  document.getElementById("spots-section").classList.add("hidden");
+  document.getElementById("spot-title").textContent = sp.label + (sp.valueText ? ` · ${sp.valueText}` : "");
+  document.getElementById("spot-detail").textContent = sp.detail;
+  document.getElementById("spot-lines").innerHTML = sp.lines.length
+    ? sp.lines.map((l) => { const [p, ...r] = l.split(" "); const c = net.colorOf(p, r.join(" ")); return `<button class="chip-line ${p.toLowerCase()}" data-key="${lineKey(l)}" style="--c:${c};--fg:${NetMap.textColorFor(c)}">${esc(r.join(" "))}</button>`; }).join("")
+    : '<span class="muted small">No VAG line serves this spot.</span>';
+  document.querySelectorAll("#spot-lines button").forEach((b) => b.addEventListener("click", () => highlight(new Set([b.dataset.key]))));
+  highlight(new Set(sp.lines.map(lineKey)));
+  if (sp.bounds?.isValid()) map.flyToBounds(sp.bounds, { padding: [30, 30] });
+  else map.flyTo([sp.lat, sp.lon], 15);
+
+  const ul = document.getElementById("spot-suggestions");
+  const sugg = suggestionsFor(sp);
+  ul.innerHTML = sugg.length ? sugg.map((s, i) => `<li>
+      <b>${esc(s.title)}</b><span class="why">${esc(s.why)}</span>
+      ${s.feature ? `<span class="effect" id="eff-${i}"><span class="chip">estimating drivers…</span></span><button class="primary small" data-i="${i}">Add to plan</button>` : ""}
+    </li>`).join("") : '<li class="muted">No automatic suggestion for this spot.</li>';
+  ul.querySelectorAll("button[data-i]").forEach((b) => b.addEventListener("click", () => {
+    queueFeature({ ...sugg[+b.dataset.i].feature, title: sugg[+b.dataset.i].title });
+    b.textContent = "✓ Added"; b.disabled = true;
+  }));
+  sugg.forEach(async (s, i) => {
+    if (!s.feature) return;
+    const res = await fetch("/api/planner/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ features: [s.feature] }) });
+    const step = (await res.json()).steps?.[0]?.Bus;
+    const el = document.getElementById(`eff-${i}`);
+    if (!el || !step) return;
+    const peak = step.peak, h = Math.round(step.hours);
+    el.innerHTML = peak > 0 ? `<span class="chip gain">+${peak} drivers free</span>` : peak < 0 ? `<span class="chip cost">needs ${-peak} drivers</span>` : `<span class="chip">± 0 drivers at peak</span>`;
+    if (h) el.innerHTML += `<span class="chip ${h > 0 ? "gain" : "cost"}">${h > 0 ? "+" : ""}${h} h/day</span>`;
+  });
+}
+function closeSpot() {
+  document.getElementById("spot").classList.add("hidden");
+  document.getElementById("spots-section").classList.remove("hidden");
+  highlight(null);
+}
+document.getElementById("spot-close").addEventListener("click", closeSpot);
+
+// suggestions are handed to the planner through localStorage
+function queueFeature(f) {
+  const q = JSON.parse(localStorage.getItem("planner.pending") || "[]");
+  q.push(f);
+  localStorage.setItem("planner.pending", JSON.stringify(q));
+  updateQueued();
+}
+function updateQueued() {
+  const n = JSON.parse(localStorage.getItem("planner.pending") || "[]").length;
+  const el = document.getElementById("queued");
+  el.textContent = n ? `+${n}` : "";
+  el.classList.toggle("hidden", !n);
+}
+
+// ---------- map controls ----------
+document.querySelectorAll("[data-layer]").forEach((cb) => cb.addEventListener("change", () => net.setLayer(cb.dataset.layer, cb.checked)));
+document.getElementById("show-stops").addEventListener("change", (e) => net.setStopsVisible(e.target.checked));
 document.getElementById("show-live").addEventListener("change", (e) => net.setVehiclesVisible(e.target.checked));
+document.getElementById("show-problems").addEventListener("change", (e) => {
+  for (const lg of [dataLayer, markerLayer]) e.target.checked ? lg.addTo(map) : map.removeLayer(lg);
+});
 
 (async () => {
+  updateQueued();
   meta = await (await fetch("/api/diagnose")).json();
   renderLayerList();
   select("supply_demand");
   await net.start();
   net.setVehiclesVisible(false);
-  fadeNetwork();
+  net.loadStops(true);
+  fillLineFilter();
+  highlight(null);
 })();

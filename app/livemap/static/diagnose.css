@@ -35,3 +35,22 @@ a { color: #2a78d6; }
 .layer-list button { justify-content: flex-start; font-size: 13px; }
 .lever { margin-top: 10px; }
 button.link { border: none; background: none; color: #2a78d6; padding: 4px 0; font-size: 12px; cursor: pointer; font: inherit; font-size: 12px; }
+
+.mt { margin-top: 16px; }
+.line-list li { cursor: pointer; }
+.line-list li:hover b { text-decoration: underline; }
+.spot { background: #f5f9fe; border: 1px solid #bcd6f5; border-radius: 10px; padding: 10px 12px; }
+.spot h3 { margin: 4px 0 2px; font-size: 15px; }
+.spot .back { padding: 0; }
+.line-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+.chip-line { font: inherit; font-size: 11px; font-weight: 700; min-width: 26px; padding: 2px 6px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.15); background: var(--c); color: var(--fg); cursor: pointer; }
+.chip-line.bus { border-radius: 10px; }
+.chip-line.tram { border-radius: 4px; }
+.chip-line.ubahn { border-radius: 2px; }
+.suggestions { list-style: none; margin: 0; padding: 0; }
+.suggestions li { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; display: grid; gap: 4px; }
+.suggestions .why { font-size: 12px; color: var(--text-secondary); }
+.suggestions button.primary.small { justify-self: start; font-size: 12px; padding: 3px 10px; background: #2a78d6; color: #fff; border: 1px solid #2a78d6; border-radius: 6px; cursor: pointer; }
+.suggestions button:disabled { background: #0ca30c; border-color: #0ca30c; }
+.map-controls select { width: 100%; margin-bottom: 4px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; }

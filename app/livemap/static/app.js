@@ -1,6 +1,5 @@
 // Nuremberg live network map: sidebar, stops and line filter around the shared NetMap layer.
 
-const STOPS_MIN_ZOOM = 14;
 const BUS_COLOR = getComputedStyle(document.documentElement).getPropertyValue("--bus").trim();
 const { esc, fmtTime, fmtDelay, lineLabel, REGIO_COLOR } = NetMap;
 
@@ -32,44 +31,6 @@ const net = NetMap.create(map, {
   },
   onStats: renderStats,
 });
-
-// ---------- stops ----------
-const stopsLayer = L.layerGroup();
-async function loadStops() {
-  const stops = await (await fetch("/api/stops")).json();
-  for (const s of stops) {
-    const m = L.circleMarker([s.lat, s.lon], {
-      radius: 4, color: "#52514e", weight: 1.5, fillColor: "#fff", fillOpacity: 1, pane: "stops",
-    });
-    m.bindTooltip(s.name);
-    m.on("click", () => showDepartures(m, s));
-    stopsLayer.addLayer(m);
-  }
-  updateStopsVisibility();
-}
-function updateStopsVisibility() {
-  const want = layerChecked("stops") && map.getZoom() >= STOPS_MIN_ZOOM;
-  if (want && !map.hasLayer(stopsLayer)) stopsLayer.addTo(map);
-  if (!want && map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer);
-}
-map.on("zoomend", updateStopsVisibility);
-
-async function showDepartures(marker, stop) {
-  marker.bindPopup(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">Loading departures…</p></div>`).openPopup();
-  try {
-    const deps = await (await fetch(`/api/departures/${stop.vgn_id}`)).json();
-    const rows = deps.map((d) => {
-      const planned = new Date(d.planned), actual = d.actual ? new Date(d.actual) : planned;
-      const delay = (actual - planned) / 1000;
-      return `<tr><td><b>${esc(d.line)}</b></td><td>${esc(d.direction)}</td><td>${fmtTime(planned / 1000)}</td>
-        <td class="${delay > 180 ? "late" : ""}">${d.realtime ? fmtDelay(delay) : "timetable"}</td></tr>`;
-    }).join("");
-    marker.setPopupContent(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">${esc(stop.products.join(" · "))}</p>
-      <table>${rows || "<tr><td>No departures</td></tr>"}</table></div>`);
-  } catch {
-    marker.setPopupContent(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">Departures unavailable</p></div>`);
-  }
-}
 
 // ---------- sidebar ----------
 function renderStats(s) {
@@ -121,7 +82,7 @@ function setLine(line) {
 }
 document.getElementById("line-filter").addEventListener("change", (e) => setLine(e.target.value || selectedLine));
 document.querySelectorAll("[data-layer]").forEach((cb) => cb.addEventListener("change", () => {
-  if (cb.dataset.layer === "stops") return updateStopsVisibility();
+  if (cb.dataset.layer === "stops") return net.setStopsVisible(cb.checked);
   net.setLayer(cb.dataset.layer, cb.checked);
 }));
 document.querySelectorAll("[data-veh]").forEach((cb) => cb.addEventListener("change", () => net.setProductVisible(cb.dataset.veh, cb.checked)));
@@ -129,5 +90,5 @@ document.querySelectorAll("[data-veh]").forEach((cb) => cb.addEventListener("cha
 // ---------- boot ----------
 (async () => {
   await net.start();
-  loadStops();
+  net.loadStops(layerChecked("stops"));
 })();

@@ -300,6 +300,45 @@ const NetMap = (() => {
       if (e.popup._source && e.popup._source._trip) { openTripId = null; tripLayer.clearLayers(); }
     });
 
+    // ---------- stops (VAG, with live departures on click) ----------
+    const stopsLayer = L.layerGroup();
+    let stopsOn = false, stopsForced = false;
+    async function loadStops(visible = true) {
+      const stops = await (await fetch("/api/stops")).json();
+      for (const s of stops) {
+        const m = L.circleMarker([s.lat, s.lon], {
+          radius: 4, color: "#52514e", weight: 1.5, fillColor: "#fff", fillOpacity: 1, pane: "stops",
+        });
+        m.bindTooltip(s.name);
+        m.on("click", () => showDepartures(m, s));
+        stopsLayer.addLayer(m);
+      }
+      stopsOn = visible;
+      updateStops();
+    }
+    function updateStops() {
+      const want = (stopsOn || stopsForced) && map.getZoom() >= (o.stopsMinZoom ?? 14);
+      if (want && !map.hasLayer(stopsLayer)) stopsLayer.addTo(map);
+      if (!want && map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer);
+    }
+    map.on("zoomend", updateStops);
+    async function showDepartures(marker, stop) {
+      marker.bindPopup(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">Loading departures…</p></div>`).openPopup();
+      try {
+        const deps = await (await fetch(`/api/departures/${stop.vgn_id}`)).json();
+        const rows = deps.map((d) => {
+          const planned = new Date(d.planned), actual = d.actual ? new Date(d.actual) : planned;
+          const delay = (actual - planned) / 1000;
+          return `<tr><td><b>${esc(d.line)}</b></td><td>${esc(d.direction)}</td><td>${fmtTime(planned / 1000)}</td>
+            <td class="${delay > 180 ? "late" : ""}">${d.realtime ? fmtDelay(delay) : "timetable"}</td></tr>`;
+        }).join("");
+        marker.setPopupContent(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">${esc(stop.products.join(" · "))}</p>
+          <table>${rows || "<tr><td>No departures</td></tr>"}</table></div>`);
+      } catch {
+        marker.setPopupContent(`<div class="popup"><h3>${esc(stop.name)}</h3><p class="meta">Departures unavailable</p></div>`);
+      }
+    }
+
     async function start() {
       await loadNetwork();
       await poll();
@@ -308,7 +347,9 @@ const NetMap = (() => {
     }
 
     return {
-      start, animate, setLayer, updateLabels, colorOf, layers, lineFeatures, vehicleLayer,
+      start, animate, setLayer, updateLabels, colorOf, layers, lineFeatures, vehicleLayer, loadStops,
+      setStopsVisible(on) { stopsOn = on; updateStops(); },
+      forceStops(on) { stopsForced = on; updateStops(); },
       get trips() { return trips; },
       setProductVisible(product, on) { showProducts[product] = on; animate(); },
       setLabelFilter(fn) { labelFilter = fn; updateLabels(); },

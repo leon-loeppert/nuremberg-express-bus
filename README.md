@@ -97,6 +97,10 @@ recording started, so they are a line-level model, not a replay of last week.
 - **Heatmaps** (`src/expressbus/eval/diagnose.py`), each linked to the planner lever that addresses it:
   delay build-up and bunching (observed, recorded live data), service gaps, PT vs. car, buses
   parallel to rail (timetable).
+- **Problem spots → suggestions:** clicking a spot zooms in, highlights the lines serving it (with
+  stops and live departures) and lists concrete suggestions (thin a parallel line, more trips, bus
+  priority, interleave, express feeder) with their driver effect. "Add to plan" queues the change
+  for the planner (`localStorage`), which also keeps its scenario across reloads.
 - The timetable model includes Fürth city buses, regional buses and regional trains as fixed
   background, so stops outside the VAG network are not wrongly counted as unserved.
 

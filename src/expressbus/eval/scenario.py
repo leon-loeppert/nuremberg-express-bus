@@ -19,6 +19,7 @@ from expressbus.eval.timetable import Timetable
 FEATURES = {
     "remove_line": {"label": "Remove line", "help": "Delete every trip of a line."},
     "thin_line": {"label": "Thin out trips", "help": "Keep only every n-th trip of a line in a time window (e.g. evenings)."},
+    "densify_line": {"label": "More trips", "help": "Double the frequency of a line in a time window (an extra trip halfway between two)."},
     "shorten_line": {"label": "Shorten line", "help": "Cut a line at a station and drop the part towards one terminus (e.g. where it runs parallel to rail)."},
     "speedup": {"label": "Speed up line", "help": "Bus lanes / signal priority: running times x (1 - pct). Fewer vehicles needed, less delay."},
     "interline": {"label": "Merge lines (interlining)", "help": "Two lines share vehicles at a common terminus; passengers ride through without changing."},
@@ -62,6 +63,31 @@ def thin_line(tt: Timetable, line: str, from_h: float = 20, to_h: float = 24, ke
     for _, g in win.groupby(["product", "line", "direction"]):
         drop += [t for i, t in enumerate(g.trip_id) if i % int(keep_every) != 0]
     _drop_trips(tt, drop)
+
+
+def densify_line(tt: Timetable, line: str, from_h: float = 6, to_h: float = 20, **_) -> None:
+    """Insert a copy of each trip halfway to the next one of the same direction."""
+    trips = tt.trips[_line_mask(tt, line)].copy()
+    trips["start"] = trips.trip_id.map(_first_dep(tt))
+    win = trips[(trips.start >= from_h * 3600) & (trips.start < to_h * 3600)].sort_values("start")
+    st = tt.stop_times.set_index("trip_id")
+    new_trips, new_st = [], []
+    for _, g in win.groupby(["product", "line", "direction"]):
+        rows = g.to_dict("records")
+        for a, b in itertools.pairwise(rows):
+            gap = b["start"] - a["start"]
+            if gap < 6 * 60:
+                continue
+            tid = f"{a['trip_id']}.d"
+            shift = int(gap // 2)
+            src = st.loc[[a["trip_id"]]].reset_index()
+            src["trip_id"] = tid
+            src[["arr", "dep"]] += shift
+            new_st.append(src)
+            new_trips.append({**{k: a[k] for k in tt.trips.columns}, "trip_id": tid})
+    if new_trips:
+        tt.trips = pd.concat([tt.trips, pd.DataFrame(new_trips)], ignore_index=True)
+        tt.stop_times = pd.concat([tt.stop_times, *new_st], ignore_index=True)
 
 
 def shorten_line(tt: Timetable, line: str, at_station: str, drop_towards: str, **_) -> None:
@@ -169,7 +195,7 @@ def add_express(tt: Timetable, name: str, stations: list[str], headway_min: floa
 
 
 APPLY = {
-    "remove_line": remove_line, "thin_line": thin_line, "shorten_line": shorten_line,
+    "remove_line": remove_line, "thin_line": thin_line, "densify_line": densify_line, "shorten_line": shorten_line,
     "speedup": speedup, "interline": interline, "debunch": debunch, "add_express": add_express,
 }
 

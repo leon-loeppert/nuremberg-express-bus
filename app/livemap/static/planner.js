@@ -5,7 +5,7 @@ const DAY = "2026-09-28";
 const COLORS = { scen: "#2a78d6", base: "#9a9994", cap: "#0b0b0b", over: "#d03b3b",
   removed: "#d03b3b", thinned: "#eda100", shortened: "#eb6834", speedup: "#0ca30c", merged: "#b5338a", express: "#4a3aa7" };
 const TYPE_LABEL = {
-  remove_line: "Remove line", thin_line: "Thin out trips", shorten_line: "Shorten line", speedup: "Speed up line",
+  remove_line: "Remove line", thin_line: "Thin out trips", densify_line: "More trips", shorten_line: "Shorten line", speedup: "Speed up line",
   interline: "Merge lines", debunch: "Interleave lines", add_express: "Add express line",
 };
 const DAYS_LABEL = { all: "every day", weekday: "Mon–Fri", weekend: "Sat/Sun" };
@@ -86,6 +86,7 @@ function styleLines() {
   for (const f of active) {
     if (f.type === "remove_line") paint(f.line, COLORS.removed, { dashArray: "2 8", opacity: 0.6 });
     if (f.type === "thin_line") paint(f.line, COLORS.thinned, { dashArray: "10 6" });
+    if (f.type === "densify_line") paint(f.line, COLORS.speedup, { weight: 6 });
     if (f.type === "speedup") paint(f.line, COLORS.speedup);
     if (f.type === "interline" || f.type === "debunch") { paint(f.line_a, COLORS.merged); paint(f.line_b, COLORS.merged); }
     if (f.type === "shorten_line") {
@@ -152,6 +153,7 @@ function featureTitle(f) {
   switch (f.type) {
     case "remove_line": return `Remove ${lineName(f.line)}`;
     case "thin_line": return `${lineName(f.line)}: every ${f.keep_every}. trip ${hh(f.from_h)}–${hh(f.to_h)}`;
+    case "densify_line": return `${lineName(f.line)}: double frequency ${hh(f.from_h)}–${hh(f.to_h)}`;
     case "shorten_line": return `Shorten ${lineName(f.line)} at ${stationById[f.at_station]?.name ?? "?"}`;
     case "speedup": return `Speed up ${lineName(f.line)} by ${f.pct} %`;
     case "interline": return `Merge ${lineName(f.line_a)} + ${lineName(f.line_b)}`;
@@ -175,7 +177,22 @@ function addFeature(f) {
   features.push({ id: nextId++, enabled: true, days: "all", ...f });
   changed();
 }
+// the scenario survives reloads; the diagnosis page can queue features via localStorage
+const STORE = "planner.scenario", PENDING = "planner.pending";
+function save() {
+  localStorage.setItem(STORE, JSON.stringify(features));
+}
+function restore() {
+  try {
+    features = JSON.parse(localStorage.getItem(STORE) || "[]");
+    const pending = JSON.parse(localStorage.getItem(PENDING) || "[]");
+    localStorage.removeItem(PENDING);
+    for (const f of pending) features.push({ enabled: true, days: "all", ...f });
+  } catch { features = []; }
+  features.forEach((f) => { f.id = nextId++; });
+}
 function changed() {
+  save();
   renderFeatures();
   renderPresets();
   styleLines();
@@ -258,10 +275,11 @@ function renderForm() {
   form.classList.remove("hidden");
   const t = formType;
   let body = `<b>${TYPE_LABEL[t]}</b>`;
-  if (["remove_line", "thin_line", "shorten_line", "speedup"].includes(t)) {
+  if (["remove_line", "thin_line", "densify_line", "shorten_line", "speedup"].includes(t)) {
     body += `<label>Line<select name="line">${lineOptions(t === "thin_line" || t === "speedup")}</select></label>`;
   }
   if (t === "thin_line") body += `<div class="row"><label>From (h)<input name="from_h" type="number" step="0.5" value="20"></label><label>To (h)<input name="to_h" type="number" step="0.5" value="27"></label><label>Keep every<input name="keep_every" type="number" min="2" value="2"></label></div>`;
+  if (t === "densify_line") body += `<div class="row"><label>From (h)<input name="from_h" type="number" step="0.5" value="6"></label><label>To (h)<input name="to_h" type="number" step="0.5" value="20"></label><span></span></div>`;
   if (t === "speedup") body += `<label>Running time reduction (%)<input name="pct" type="number" min="1" max="40" value="10"></label>`;
   if (t === "shorten_line") body += `<label>Cut at station<select name="at_station"></select></label><label>Drop the part towards<select name="drop_towards"></select></label>`;
   if (t === "interline" || t === "debunch") body += `<label>Line A<select name="line_a">${lineOptions(false)}</select></label><label>Line B${t === "debunch" ? " (gets shifted)" : ""}<select name="line_b">${lineOptions(false)}</select></label>`;
@@ -533,11 +551,11 @@ function renderKpis(r) {
   meta = await (await fetch(`/api/planner/meta?day=${DAY}`)).json();
   for (const l of meta.lines) lineById[l.id] = l;
   for (const s of meta.stations) stationById[s.id] = s;
+  restore();
+  changed();
   await net.start();
+  styleLines();
   document.querySelectorAll("[data-veh]").forEach((cb) => cb.dispatchEvent(new Event("change")));
   buildStationLayer();
   renderAddButtons();
-  renderPresets();
-  renderFeatures();
-  refreshInventory();
 })();
