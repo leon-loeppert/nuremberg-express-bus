@@ -1,0 +1,32 @@
+body.diagnose #sidebar { width: 360px; }
+a { color: #2a78d6; }
+.hidden { display: none !important; }
+.layer-list { display: grid; gap: 4px; margin-bottom: 8px; }
+.layer-list button { text-align: left; font: inherit; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.layer-list button .src { font-size: 11px; color: var(--text-muted); }
+.layer-list button.active { border-color: #2a78d6; background: #f5f9fe; font-weight: 600; }
+#layer-info h3 { margin: 0 0 4px; font-size: 15px; }
+.question { margin: 0 0 6px; color: var(--text-secondary); }
+.lever { margin: 0 0 6px; font-size: 13px; padding: 6px 8px; background: #f3f2ef; border-radius: 6px; }
+.legend-box { margin: 8px 0; font-size: 11px; color: var(--text-secondary); }
+.ramp { height: 10px; border-radius: 3px; margin: 2px 0; }
+.ramp-labels { display: flex; justify-content: space-between; }
+.cat-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; margin-top: 6px; }
+.cat-legend span { display: flex; align-items: center; gap: 5px; }
+.cat-legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+.sd-mode { margin: 6px 0; }
+.sd-mode label { font-size: 13px; }
+#summary { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+#summary .tile { padding: 8px; }
+#summary .tile .value { font-size: 18px; }
+.top-list, .line-list { margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); }
+.top-list li { padding: 4px 0; cursor: pointer; border-bottom: 1px solid var(--surface-2); }
+.top-list li:hover { color: var(--text-primary); }
+.top-list li b { color: var(--text-primary); }
+.top-list .val { float: right; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+.top-list .sub { display: block; font-size: 11px; color: var(--text-muted); }
+.line-list li { padding: 2px 0; }
+.line-list .bar { display: inline-block; height: 8px; background: #2a78d6; border-radius: 2px; vertical-align: middle; margin-left: 6px; }
+.loading { color: var(--text-muted); font-size: 13px; }
+.rank-label { background: none; border: none; box-shadow: none; font-weight: 700; font-size: 11px; color: #0b0b0b; padding: 0; }
+.rank-label::before { display: none; }

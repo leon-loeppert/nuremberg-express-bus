@@ -2,8 +2,8 @@
 
 The GTFS feed (https://www.vgn.de/opendata/GTFS.zip, CC-BY 3.0 DE, VGN GmbH) covers the
 whole VGN region. We keep VAG lines (U-Bahn, tram, city/night/replacement bus) as the
-"editable" network and S-Bahn trains inside the study area as fixed background, since
-passengers use them too.
+"editable" network. Everything else inside the study area (S-Bahn, regional trains, Fürth
+city buses, regional buses) stays as fixed background, since passengers use it too.
 
     python -m expressbus.eval.timetable   # download + preprocess once (~1 min)
 """
@@ -50,6 +50,9 @@ def preprocess(force: bool = False) -> None:
 
     routes = read("routes.txt")
     routes["product"] = routes.route_id.str.split("-").str[0].map(PREFIX_PRODUCT)
+    other = routes["product"].isna()
+    routes.loc[other & (routes.route_type == "3"), "product"] = "OtherBus"  # infra fürth, regional buses
+    routes.loc[other & routes.route_type.isin(["0", "1", "2"]), "product"] = "Rail"  # RB/RE
     routes = routes.dropna(subset=["product"])
     trips = read("trips.txt", usecols=["route_id", "service_id", "trip_id", "trip_headsign", "direction_id"])
     trips = trips.merge(routes[["route_id", "route_short_name", "product"]], on="route_id")

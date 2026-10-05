@@ -106,6 +106,12 @@ def _warm_planner():
     planner_meta(DEFAULT_DAY)
     engine.inventory(DEFAULT_DAY, [])
     engine.evaluate(DEFAULT_DAY, 7, [])
+    from expressbus.eval import diagnose
+    from expressbus.eval.coverage import supply_demand
+
+    supply_demand()
+    for key in ("service_gaps", "parallel_rail", "pt_vs_car"):
+        diagnose.layer(key)
     logging.getLogger(__name__).info("planner baseline ready")
 
 
@@ -147,6 +153,35 @@ async def planner_evaluate(req: EvaluateRequest):
         raise HTTPException(400, "days must be 1-14")
     async with _eval_lock:
         return await asyncio.to_thread(engine.evaluate, req.start, req.days, req.features)
+
+
+# ---------- diagnosis ----------
+@app.get("/diagnose")
+def diagnose_page():
+    return FileResponse(STATIC / "diagnose.html")
+
+
+@app.get("/api/diagnose")
+def diagnose_layers():
+    from expressbus.eval.diagnose import LAYERS
+
+    return LAYERS
+
+
+@app.get("/api/diagnose/supply_demand")
+async def diagnose_supply_demand():
+    from expressbus.eval.coverage import supply_demand
+
+    return await asyncio.to_thread(supply_demand)
+
+
+@app.get("/api/diagnose/{key}")
+async def diagnose_layer(key: str, bus_only: bool = True):
+    from expressbus.eval.diagnose import LAYERS, layer
+
+    if key not in LAYERS:
+        raise HTTPException(404, "unknown layer")
+    return await asyncio.to_thread(layer, key, bus_only)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

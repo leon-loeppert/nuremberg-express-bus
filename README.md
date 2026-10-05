@@ -86,7 +86,22 @@ of 28 Sep – 4 Oct 2026).
 passenger counts yet). Car congestion factors are estimates. Delays only exist from the day
 recording started, so they are a line-level model, not a replay of last week.
 
+## Network diagnosis
+`http://localhost:8000/diagnose`: where does the current network have problems?
+
+- **Over- / under-supply** (`src/expressbus/eval/coverage.py`): 300 m cells. Places offered per
+  weekday (06–21 h) within walking distance, divided by residents (Zensus 2022, 100 m grid). Red =
+  less supply per resident than typical, blue = more, dark red = not served. A second view shows bus
+  places in cells that rail already serves well, i.e. where bus trips could be redistributed.
+  Demand = residents only, so the centre and business parks show as "destination areas".
+- **Heatmaps** (`src/expressbus/eval/diagnose.py`), each linked to the planner lever that addresses it:
+  delay build-up and bunching (observed, recorded live data), service gaps, PT vs. car, buses
+  parallel to rail (timetable).
+- The timetable model includes Fürth city buses, regional buses and regional trains as fixed
+  background, so stops outside the VAG network are not wrongly counted as unserved.
+
 ## Possible data sources
+- Zensus 2022 population grid (dl-de/by-2-0): https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Bevoelkerungszahl.zip
 - VGN GTFS timetable (CC BY 3.0 DE): https://www.vgn.de/opendata/GTFS.zip
 - VAG PULS API (live departures/trips): https://start.vag.de/dm/api/v1
 - VGN GTFS open data (Nuremberg timetables): https://www.vgn.de/opendata

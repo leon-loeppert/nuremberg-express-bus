@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nuremberg Network Diagnosis</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/diagnose.css" />
+</head>
+<body class="diagnose">
+  <aside id="sidebar">
+    <header>
+      <h1>Network Diagnosis</h1>
+      <p class="muted">Where does the current network have problems? <a href="/">Live map</a> · <a href="/planner">Planner →</a></p>
+    </header>
+
+    <section>
+      <h2>Problem layer</h2>
+      <div id="layer-list" class="layer-list"></div>
+      <label class="small" id="bus-only-row"><input type="checkbox" id="bus-only" checked /> Buses only (observed layers)</label>
+    </section>
+
+    <section id="layer-info">
+      <h3 id="info-title"></h3>
+      <p id="info-question" class="question"></p>
+      <p class="lever"><b>Lever in the planner:</b> <span id="info-lever"></span></p>
+      <p class="muted small" id="info-source"></p>
+      <div id="legend" class="legend-box"></div>
+      <div id="sd-mode" class="sd-mode hidden">
+        <label><input type="radio" name="sdmode" value="index" checked /> Supply per resident</label>
+        <label><input type="radio" name="sdmode" value="redundant" /> Bus places where rail already serves</label>
+      </div>
+      <div id="summary"></div>
+    </section>
+
+    <section>
+      <h2 id="top-title">Top problem spots</h2>
+      <ol id="top-list" class="top-list"></ol>
+    </section>
+
+    <section>
+      <h2 id="lines-title">Lines most affected</h2>
+      <ol id="line-list" class="line-list"></ol>
+    </section>
+
+    <section>
+      <h2>Map</h2>
+      <label><input type="checkbox" id="show-network" checked /> Network lines (faded)</label>
+      <label><input type="checkbox" id="show-live" /> Live vehicles</label>
+    </section>
+  </aside>
+  <main id="map"></main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="/static/netmap.js"></script>
+  <script src="/static/diagnose.js"></script>
+</body>
+</html>

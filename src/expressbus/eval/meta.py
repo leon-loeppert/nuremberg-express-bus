@@ -34,7 +34,7 @@ def planner_meta(day: date) -> dict:
     tt = load_day(day)
     st = tt.stop_times.merge(tt.trips[["trip_id", "product", "line", "headsign"]], on="trip_id")
     stations = tt.stations.set_index("station")
-    rail = stations.loc[st[st["product"].isin(["UBahn", "Tram", "SBahn"])].station.unique()]
+    rail = stations.loc[st[st["product"].isin(["UBahn", "Tram", "SBahn", "Rail"])].station.unique()]
     blocks = build_blocks(tt)
     grid = np.arange(4 * 3600, 26 * 3600, 300)
 
