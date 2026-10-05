@@ -21,8 +21,6 @@ import numpy as np
 import pandas as pd
 
 from expressbus.data.vag import ROOT
-from expressbus.eval.cartimes import car_time, free_flow_matrix
-from expressbus.eval.planner import Planner
 from expressbus.eval.timetable import EDITABLE, Timetable, load_day
 
 WINDOW = (6 * 3600, 21 * 3600)
@@ -81,42 +79,27 @@ def _is_holiday_schedule(day: date) -> bool:
 
 # ---------- KPIs ----------
 def travel_kpis(tt: Timetable, aliases: dict[str, str] | None = None) -> dict:
-    """PT vs. car on the demand-weighted trip sample (see demand.py), walk to/from stops included."""
+    """PT vs. car on the demand matrix (see demand.py): every zone-to-zone trip, weighted by demand,
+    door to door (walk + wait + ride) at the day's sampled departure times."""
     from expressbus.eval import demand
 
-    groups = demand.grouped()
-    free = free_flow_matrix(demand.points(), [(t["o"], t["d"]) for ts in groups.values() for t in ts])
-    planner = Planner(tt, aliases)
-    weekend = tt.day.weekday() >= 5 or _is_holiday_schedule(tt.day)
-    ratios, pt_min, car_min, transfers, unreachable = [], [], [], [], 0
-    for t0 in departure_times(tt.day):
-        for o, trips in groups.items():
-            arrival, boards = planner.scan(o, t0)
-            for t in trips:
-                if (t["o"], t["d"]) not in free:
-                    continue
-                k = planner.idx.get(t["d"])
-                pt = arrival[k] - t0 if k is not None else math.inf
-                if pt == math.inf or pt > UNREACHABLE_CAP_S:
-                    unreachable += 1
-                    pt = UNREACHABLE_CAP_S
-                else:
-                    transfers.append(max(0, boards[k] - 1))
-                pt += t["walk_s"]
-                car = car_time(free[(t["o"], t["d"])], t0 // 3600, weekend)
-                ratios.append(pt / car)
-                pt_min.append(pt / 60)
-                car_min.append(car / 60)
-    r = np.array(ratios)
+    m = demand.matrix()
+    T, car = m["T"], m["car"]
+    pt = demand.pt_minutes(tt, times=tuple(departure_times(tt.day)))
+    on = T > 0
+    ratio = np.where(on, pt / np.where(car > 0, car, 1), 0)
+    order = np.argsort(ratio[on])
+    w = T[on][order] / T[on].sum()
+    median = float(ratio[on][order][np.searchsorted(np.cumsum(w), 0.5)])
     return {
-        "pt_car_ratio_median": round(float(np.median(r)), 3),
-        "pt_car_ratio_mean": round(float(r.mean()), 3),
-        "share_competitive": round(float((r <= 1.5).mean()), 3),
-        "pt_minutes_mean": round(float(np.mean(pt_min)), 1),
-        "car_minutes_mean": round(float(np.mean(car_min)), 1),
-        "transfers_mean": round(float(np.mean(transfers)), 2) if transfers else None,
-        "unreachable_share": round(unreachable / len(r), 3),
-        "od_trips": len(r),
+        "pt_car_ratio_median": round(median, 3),
+        "pt_car_ratio_mean": round(float((T * ratio).sum()), 3),
+        "share_competitive": round(float(T[on & (pt <= 1.5 * car)].sum()), 4),
+        "pt_minutes_mean": round(float((T * pt).sum()), 2),
+        "car_minutes_mean": round(float((T * car).sum()), 2),
+        "transfers_mean": None,
+        "unreachable_share": round(float(T[on & (pt >= 120)].sum()), 4),
+        "od_trips": int(on.sum()),
     }
 
 

@@ -129,8 +129,8 @@ def matrix() -> dict:
     return {"T": t, "car": np.nan_to_num(car, nan=0.0), "dist": dist, "stations": stn, "walk": z.walk_s.values / 60}
 
 
-def pt_minutes(tt, rows=None) -> np.ndarray:
-    """PT door-to-door minutes (walk + wait + ride) for zone rows -> all zones, mean of PROBE_TIMES."""
+def pt_minutes(tt, rows=None, times=PROBE_TIMES) -> np.ndarray:
+    """PT door-to-door minutes (walk + wait + ride) for zone rows -> all zones, mean over `times`."""
     from expressbus.eval.planner import Planner
 
     m = matrix()
@@ -144,10 +144,10 @@ def pt_minutes(tt, rows=None) -> np.ndarray:
         by_station[stn[i]].append(k)
     for s, ks in by_station.items():
         acc = np.zeros(len(stn))
-        for t0 in PROBE_TIMES:
+        for t0 in times:
             arr, _ = planner.scan(s, t0)
             a = np.array([arr[c] if c >= 0 else np.inf for c in col], dtype=float) - t0
             acc += np.minimum(np.nan_to_num(a, posinf=7200), 7200) / 60
         for k in ks:
-            out[k] = acc / len(PROBE_TIMES) + walk[rows[k]] + walk
+            out[k] = acc / len(times) + walk[rows[k]] + walk
     return out

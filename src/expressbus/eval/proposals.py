@@ -269,8 +269,9 @@ def cut_candidates() -> list[dict]:
         action = "remove" if share >= 0.75 and lose < 100 else "thin" if share >= 0.35 else None
         if not action:
             continue
-        feat = ({"type": "remove_line", "line": f"Bus:{ln}"} if action == "remove"
-                else {"type": "thin_line", "line": f"Bus:{ln}", "from_h": 6, "to_h": 20, "keep_every": 2})
+        # cuts apply Mon-Fri only: that is when the express lines run and need the drivers
+        feat = ({"type": "remove_line", "line": f"Bus:{ln}", "days": "weekday"} if action == "remove"
+                else {"type": "thin_line", "line": f"Bus:{ln}", "from_h": 6, "to_h": 20, "keep_every": 2, "days": "weekday"})
         inv = engine.inventory(DAY, [feat])["steps"][0]["Bus"]
         if inv["peak"] <= 0:
             continue
@@ -278,7 +279,7 @@ def cut_candidates() -> list[dict]:
         out.append({
             "line": f"Bus {ln}", "action": action, "feature": feat, "drivers": inv["peak"], "hours": inv["hours"],
             "rail_share": round(share, 2), "residents_losing_only_service": lose, "hours_lost_per_day": round(lost),
-            "title": f"{'Remove' if action == 'remove' else 'Thin (every 2nd trip 06–20 h)'} Bus {ln}",
+            "title": f"{'Remove' if action == 'remove' else 'Thin (every 2nd trip 06–20 h)'} Bus {ln} (Mon–Fri)",
         })
     out.sort(key=lambda c: c["hours_lost_per_day"] / c["drivers"])  # least passenger harm per driver first
     return out[:10]
@@ -320,18 +321,27 @@ def package() -> dict:
 
 @lru_cache(maxsize=1)
 def verdict() -> dict:
-    """Does the package reach the goal: better PT with the drivers we have?"""
+    """Does the package reach the goal? Judged on the full reference week (same evaluation as the planner)."""
     p = package()
     feats = [c["feature"] for c in p["cuts"]] + [x["feature"] for x in p["express"]]
-    base, scen = _impact([]), _impact(feats)
+    peak = _impact(feats)
+    r = engine.evaluate(DAY, 7, feats) if feats else None
+    if not r:
+        return {"achieved": False}
+    b, s = r["baseline"], r["scenario"]
+    drivers_ok = s["drivers_peak"]["Bus"] <= b["drivers_peak"]["Bus"] and s["driver_hours_week"]["Bus"] <= b["driver_hours_week"]["Bus"]
     return {
-        "achieved": bool(p["express"] and p["balanced"] and scen["hours_saved_per_day"] > 0),
-        "drivers_ok": p["balanced"], "drivers_before": p["drivers_before"], "drivers_after": p["drivers_after"],
-        "pt_minutes_before": round(base["pt_minutes"], 2), "pt_minutes_after": round(scen["pt_minutes"], 2),
-        "competitive_before": round(base["share_competitive"], 4), "competitive_after": round(scen["share_competitive"], 4),
-        "hours_saved_per_day": round(scen["hours_saved_per_day"]),
-        "share_faster": round(scen["share_faster"], 4), "avg_saving_min": round(scen["avg_saving_min"], 1),
-        "share_slower": round(scen["share_slower"], 4), "avg_loss_min": round(scen["avg_loss_min"], 1),
+        "achieved": bool(p["express"] and drivers_ok and s["pt_minutes_mean"] < b["pt_minutes_mean"]),
+        "drivers_ok": drivers_ok, "drivers_before": b["drivers_peak"]["Bus"], "drivers_after": s["drivers_peak"]["Bus"],
+        "driver_hours_before": b["driver_hours_week"]["Bus"], "driver_hours_after": s["driver_hours_week"]["Bus"],
+        "pt_minutes_before": b["pt_minutes_mean"], "pt_minutes_after": s["pt_minutes_mean"],
+        "competitive_before": b["share_competitive"], "competitive_after": s["share_competitive"],
+        "wait_before": b["expected_wait_min"], "wait_after": s["expected_wait_min"],
+        "period": r["period"],
+        # who gains / loses, weekday peaks
+        "hours_saved_per_day": round(peak["hours_saved_per_day"]),
+        "share_faster": round(peak["share_faster"], 4), "avg_saving_min": round(peak["avg_saving_min"], 1),
+        "share_slower": round(peak["share_slower"], 4), "avg_loss_min": round(peak["avg_loss_min"], 1),
     }
 
 
